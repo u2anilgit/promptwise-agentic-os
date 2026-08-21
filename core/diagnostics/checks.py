@@ -101,6 +101,17 @@ def _check_services_gateway(config: dict | None = None) -> CheckResult:
         )
 
 
+def _check_policy_load(config: dict | None = None) -> CheckResult:
+    from core.policy.engine import load_policy
+
+    config = config if config is not None else resolve_config_auto()
+    try:
+        rules = load_policy(config)
+    except Exception as exc:  # noqa: BLE001 — doctor must never crash on a bad policy file
+        return CheckResult(name="policy.load", status="FAIL", message=f"policy failed to load: {exc}")
+    return CheckResult(name="policy.load", status="PASS", message=f"{len(rules)} rule(s) loaded")
+
+
 def _check_audit_chain(config: dict | None = None) -> CheckResult:
     from core.audit.log import verify_chain
 
@@ -123,7 +134,7 @@ def run_diagnostics(config: dict | None = None) -> list[CheckResult]:
         _check_packs_integrity(config),
         _not_yet_implemented("services.ollama", "Phase 1"),
         _not_yet_implemented("services.qdrant", "Phase 4"),
-        _not_yet_implemented("policy.load", "Phase 3"),
+        _check_policy_load(config),
         _check_audit_chain(config),
         _check_services_gateway(config),
     ]

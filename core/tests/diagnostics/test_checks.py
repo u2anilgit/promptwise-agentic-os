@@ -38,9 +38,15 @@ def test_packs_integrity_passes_with_zero_packs():
 
 def test_unimplemented_checks_warn_not_fail():
     results = run_diagnostics()
-    for name in ("services.ollama", "services.qdrant", "policy.load"):
+    for name in ("services.ollama", "services.qdrant"):
         check = next(r for r in results if r.name == name)
         assert check.status == "WARN"
+
+
+def test_policy_load_check_passes_with_default_policy():
+    results = run_diagnostics()
+    policy_check = next(r for r in results if r.name == "policy.load")
+    assert policy_check.status == "PASS"
 
 
 def test_audit_chain_check_passes_by_default():
