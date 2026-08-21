@@ -1,0 +1,26 @@
+from fastapi.testclient import TestClient
+
+from gateway.app import app
+
+client = TestClient(app)
+
+
+def test_healthz_returns_ok():
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_diagnostics_returns_check_list():
+    response = client.get("/diagnostics")
+    assert response.status_code == 200
+    body = response.json()
+    assert isinstance(body, list)
+    names = {item["name"] for item in body}
+    assert "config.resolve" in names
+
+
+def test_diagnostics_status_field_is_valid():
+    response = client.get("/diagnostics")
+    for item in response.json():
+        assert item["status"] in ("PASS", "WARN", "FAIL")
