@@ -97,3 +97,27 @@ def test_verify_endpoint_accepts_a_cwd_override(tmp_path):
         },
     )
     assert response.status_code == 200
+
+
+def test_verify_endpoint_reports_failure_for_a_failing_test_command(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "promptwise.config.yaml").write_text(
+        'verify:\n  test_command: \'python -c "import sys; sys.exit(1)"\'\n'
+    )
+    response = client.post("/verify", json={"diff": "d", "spec": "s", "cwd": str(tmp_path)})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["passed"] is False
+    assert body["blocked_reason"] is not None
+
+
+def test_verify_endpoint_reports_success_for_a_passing_test_command(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "promptwise.config.yaml").write_text(
+        "verify:\n  test_command: 'python -c \"print(1)\"'\n"
+    )
+    response = client.post("/verify", json={"diff": "d", "spec": "s", "cwd": str(tmp_path)})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["passed"] is True
+    assert body["blocked_reason"] is None
