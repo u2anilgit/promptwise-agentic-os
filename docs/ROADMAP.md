@@ -24,4 +24,4 @@ Mirrors the published artifact's phase plan (source: `research/aug2026-findings.
 
 ## Immediate next step
 
-`docs/superpowers/plans/2026-08-21-phase0-compose-foundation.md` — the bite-sized, TDD, file-by-file plan for Phase 0. Execute via `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans`.
+Phase 0 (`docs/superpowers/plans/2026-08-21-phase0-compose-foundation.md`) is done. The Phase 1 plan (hybrid router + Model Manager) has not been written yet — that's the next step.

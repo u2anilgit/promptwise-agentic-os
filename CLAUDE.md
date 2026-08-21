@@ -71,4 +71,4 @@ scripts/                     ← dev/ops scripts (doctor, support-bundle, migrat
 
 ## Current status
 
-Repo scaffolded (`git init` done). No code written yet. Next action: `docs/superpowers/plans/2026-08-21-phase0-compose-foundation.md` — Phase 0 (Compose foundation: Ollama + Qdrant + LiteLLM + FastAPI gateway + doctor/health-check skeleton).
+Phase 0 complete: compose foundation (Ollama + Qdrant + FastAPI gateway + `promptwise` CLI + doctor) is implemented and verified live via `docker compose up`. Default gateway host port is `8420` (see `compose/.env.example`). Next action: write the Phase 1 plan (hybrid router + Model Manager) per `docs/ROADMAP.md`.
