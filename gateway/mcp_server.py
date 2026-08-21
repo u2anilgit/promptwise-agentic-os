@@ -4,22 +4,19 @@
 routes in app.py: no logic here beyond argument marshalling, everything
 real lives in core.verify.gate.verify_output.
 
-Note on the `mcp` SDK API used here: the installed `mcp` package (>=2.0)
-renamed the high-level server class from `FastMCP` (import path
-`mcp.server.fastmcp`) to `MCPServer` (import path `mcp.server.mcpserver`).
-The rest of the surface used below — constructor taking a server name,
-`.tool()` decorator, async `.list_tools()`, `.run()` — is unchanged from
-the documented `FastMCP` pattern. Verified directly against the installed
-package (`python -c "import mcp.server.mcpserver as m; print(dir(m))"`)
-rather than assumed.
+Uses the official `mcp` Python SDK's high-level `FastMCP` server class at
+`mcp.server.fastmcp`, matching the standard documented pattern — verified
+directly against the package actually installed in this project's
+environment (`python`, i.e. `pip show mcp` → 1.27.1, the interpreter this
+repo's tests run under) before writing this file.
 """
 from __future__ import annotations
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.fastmcp import FastMCP
 
 from core.verify.gate import verify_output as _verify_output
 
-mcp_app = MCPServer("promptwise-agentic-os")
+mcp_app = FastMCP("promptwise-agentic-os")
 
 
 @mcp_app.tool()
