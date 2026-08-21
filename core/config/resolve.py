@@ -102,6 +102,30 @@ def discover_config_paths(root: Path | None = None) -> tuple[Path, Path, Path]:
     )
 
 
+def resolve_path(
+    config: dict[str, Any],
+    config_key: str,
+    default_relpath: str,
+    root: Path | None = None,
+) -> Path:
+    """Resolve a config-declared path against the discovered config root.
+
+    config_key is a dotted path into config, e.g. "paths.packs_installed".
+    If the resolved value is a relative path, it is resolved against `root`
+    (default: cwd) rather than left CWD-relative — so callers get a
+    consistent absolute-from-root path instead of one that silently breaks
+    when invoked from elsewhere.
+    """
+    root = root if root is not None else Path.cwd()
+    keys = config_key.split(".")
+    cursor: Any = config
+    for k in keys:
+        cursor = cursor.get(k, {}) if isinstance(cursor, dict) else {}
+    rel = cursor if isinstance(cursor, str) else default_relpath
+    p = Path(rel)
+    return p if p.is_absolute() else (root / p)
+
+
 def resolve_config_auto(
     root: Path | None = None,
     env: Mapping[str, str] | None = None,

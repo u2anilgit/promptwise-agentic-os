@@ -12,4 +12,3 @@ dashboard
 packs/installed/*
 !packs/installed/.gitkeep
 config/hardware_profile.yaml
-.promptwise

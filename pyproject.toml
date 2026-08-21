@@ -26,6 +26,7 @@ include = ["core*", "gateway*", "scripts*"]
 
 [tool.setuptools.package-data]
 core = ["config/*.yaml"]
+"core.routing" = ["*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["core/tests", "gateway/tests", "scripts/tests"]

@@ -1,4 +1,4 @@
-from core.routing.catalog import TIER_ORDER, load_catalog
+from core.routing.catalog import load_catalog, tier_order
 from core.routing.models import ModelTier
 
 
@@ -26,7 +26,13 @@ def test_cloud_tiers_require_cloud_and_cost_money():
 
 def test_tier_order_matches_catalog_keys():
     catalog = load_catalog()
-    assert set(TIER_ORDER) == set(catalog.keys())
+    assert set(tier_order(catalog)) == set(catalog.keys())
+
+
+def test_tier_order_is_local_before_cloud_and_cheapest_first():
+    catalog = load_catalog()
+    order = tier_order(catalog)
+    assert order == ["local-small", "local-large", "cloud-cheap", "cloud-premium"]
 
 
 def test_load_catalog_respects_configured_path(tmp_path):
@@ -44,3 +50,19 @@ def test_load_catalog_respects_configured_path(tmp_path):
     config = {"paths": {"model_catalog": str(custom)}}
     catalog = load_catalog(config)
     assert set(catalog.keys()) == {"only-tier"}
+
+
+def test_load_catalog_falls_back_to_packaged_copy_when_resolved_path_missing():
+    config = {"paths": {"model_catalog": "does/not/exist.yaml"}}
+    catalog = load_catalog(config)
+    assert set(catalog.keys()) == {"local-small", "local-large", "cloud-cheap", "cloud-premium"}
+
+
+def test_load_catalog_resolves_relative_default_path_against_cwd(tmp_path, monkeypatch):
+    # Simulate promptwise doctor/gateway invoked from a different cwd than
+    # the repo root — the relative default should still resolve, or fall
+    # back to the packaged copy, never raise a bare FileNotFoundError from a
+    # CWD-relative lookup.
+    monkeypatch.chdir(tmp_path)
+    catalog = load_catalog({})
+    assert set(catalog.keys()) == {"local-small", "local-large", "cloud-cheap", "cloud-premium"}

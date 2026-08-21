@@ -74,3 +74,24 @@ def test_packs_integrity_uses_configured_path(tmp_path, monkeypatch):
     result = _check_packs_integrity(config)
     assert result.status == "PASS"
     assert "1 packs" in result.message
+
+
+def test_packs_integrity_warns_when_directory_does_not_exist(tmp_path):
+    from core.diagnostics.checks import _check_packs_integrity
+
+    missing_dir = tmp_path / "no-such-packs-dir"
+    config = {"paths": {"packs_installed": str(missing_dir)}}
+    result = _check_packs_integrity(config)
+    assert result.status == "WARN"
+    assert str(missing_dir) in result.message
+
+
+def test_packs_integrity_resolves_relative_configured_path_against_root(tmp_path, monkeypatch):
+    from core.diagnostics.checks import _check_packs_integrity
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "packs" / "installed" / "example-pack").mkdir(parents=True)
+    config = {"paths": {"packs_installed": "packs/installed"}}
+    result = _check_packs_integrity(config)
+    assert result.status == "PASS"
+    assert "1 packs" in result.message
