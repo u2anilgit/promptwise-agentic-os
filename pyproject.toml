@@ -25,4 +25,4 @@ build-backend = "setuptools.build_meta"
 include = ["core*", "gateway*", "scripts*"]
 
 [tool.pytest.ini_options]
-testpaths = ["core/tests", "gateway/tests"]
+testpaths = ["core/tests", "gateway/tests", "scripts/tests"]
