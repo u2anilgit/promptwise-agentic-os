@@ -7,6 +7,7 @@ yet, that's a Phase 4+ concern.
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -28,19 +29,33 @@ def _ledger_path(config: dict[str, Any]) -> Path:
 
 
 def load_ledger(config: dict[str, Any]) -> dict[str, LedgerEntry]:
+    """A corrupt or unparseable ledger file is treated the same as a
+    missing one — degrading gracefully rather than crashing the
+    verification gate itself (a truncated/malformed file must never turn
+    into a 500 from /verify or an exception from the MCP tool).
+    """
     path = _ledger_path(config)
     if not path.exists():
         return {}
-    with path.open("r", encoding="utf-8") as f:
-        raw = json.load(f)
-    return {key: LedgerEntry(**value) for key, value in raw.items()}
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            raw = json.load(f)
+        return {key: LedgerEntry(**value) for key, value in raw.items()}
+    except (json.JSONDecodeError, ValueError):
+        return {}
 
 
 def save_ledger(config: dict[str, Any], ledger: dict[str, LedgerEntry]) -> None:
+    """Writes atomically: a temp file in the same directory, then an
+    os.replace onto the real path, so a process killed mid-write can never
+    leave a torn/corrupt ledger file behind.
+    """
     path = _ledger_path(config)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
+    tmp_path = path.with_suffix(".json.tmp")
+    with tmp_path.open("w", encoding="utf-8") as f:
         json.dump({key: entry.model_dump() for key, entry in ledger.items()}, f, indent=2)
+    os.replace(tmp_path, path)
 
 
 def record_failure(config: dict[str, Any], key: str, signature: str) -> bool:

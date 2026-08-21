@@ -1,7 +1,7 @@
 # core/tests/verify/test_ledger.py
 from pathlib import Path
 
-from core.verify.ledger import load_ledger, record_failure, record_success
+from core.verify.ledger import load_ledger, record_failure, record_success, save_ledger
 
 
 def _config(tmp_path, max_failures=3):
@@ -58,3 +58,20 @@ def test_missing_ledger_file_starts_empty(tmp_path):
     config = _config(tmp_path)
     ledger = load_ledger(config)
     assert ledger == {}
+
+
+def test_corrupt_ledger_file_loads_as_empty_without_raising(tmp_path):
+    config = _config(tmp_path)
+    ledger_path = tmp_path / "failure_ledger.json"
+    ledger_path.write_text("{not valid json at all")
+    ledger = load_ledger(config)
+    assert ledger == {}
+
+
+def test_save_ledger_leaves_no_stray_tmp_file(tmp_path):
+    config = _config(tmp_path)
+    save_ledger(config, {})
+    ledger_path = tmp_path / "failure_ledger.json"
+    tmp_leftover = ledger_path.with_suffix(".json.tmp")
+    assert ledger_path.exists()
+    assert not tmp_leftover.exists()
