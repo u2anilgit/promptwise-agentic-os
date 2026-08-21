@@ -1,0 +1,27 @@
+# Roadmap — Phase Plan & Acceptance Criteria
+
+Mirrors the published artifact's phase plan (source: `research/aug2026-findings.md` Part 5 & 7), with `MAINTENANCE.md` and pack-architecture responsibilities folded into the phase they actually depend on. Each phase must produce something usable standalone — no phase ships "half a feature."
+
+| Phase | Weeks | Delivers | Acceptance criteria |
+|---|---|---|---|
+| **0** | 1 | Compose foundation + doctor baseline | `docker compose up` → gateway responds; `promptwise doctor` runs all 8 core checks and exits 0 on a clean install; `hardware_profile.yaml` written on boot |
+| **1** | 2–3 | Hybrid router + Model Manager | `route_request` picks correct tier per `catalog/model_catalog.yaml`; RAM watchdog prevents OOM by falling back a tier; `cost_report` shows $/completed-task; privacy-forced local routing verified by test |
+| **2** | 4–5 | Verification Gate | `verify_output` blocks a deliberately-broken diff (failing test) and passes a correct one; Semgrep/Gitleaks wired in; failure ledger records a retry loop and breaks it after N identical failures; works against a real Claude Code session via MCP |
+| **3** | 6–7 | Governed system control + support bundle | 100% of fs/shell actions in a test suite pass through `check_policy`; JIT grant expires and is denied after TTL; audit chain verified unbroken; MCP tool allowlist rejects an unpinned tool; `support-bundle` produces a redacted zip; `promptwise upgrade --dry-run` reports correctly on a seeded migration |
+| **4** | 8–9 | Memory & code context | Hybrid BM25+vector RRF retrieval hits ≥80% top-3 on a benchmark fact set; tree-sitter index answers "where is X defined" correctly on a multi-file repo; PII pattern excluded from cloud-bound context in a test |
+| **5** | 10–11 | Spec-driven workflow engine | `specify → plan → tasks → implement → verify` runs end-to-end on one real feature request, produces EARS-format artifacts, and the `implement` step's output must pass Phase 2's gate before `verify` marks it done |
+| **6** | 12–13 | Dashboard | Chat + cost/routing badges + audit/policy viewer + Diagnostics panel + Builder/Pro mode toggle all render against live gateway data; first-run wizard takes a clean install to first successful chat in <10 min |
+| **6.5** | 14–16 | Desktop packaging (new) | Tauri shell wraps Phase 6 dashboard unchanged; gateway compiled to native binary via sidecar, Ollama+Qdrant bundled as sidecar binaries — no Docker needed; Linux build produces a working Flatpak (installable via `flatpak install` at minimum, Flathub submission follow-on) + AppImage; Windows build produces a signed `.exe`/`.msi` that installs and launches with zero manual steps; desktop install reads/writes the same config + pack format as the server track (`ARCHITECTURE.md` §6) |
+| **8** | 17–20 | Intelligence Packs v1 | Pack loader installs/lists/removes a pack without core restart for content-only changes; 3 stack packs + 1 database pack + 1 cloud/CI-CD pack + architecture-advisor pack ship in `packs/registry/`; each includes a working `troubleshooting.md` consumed by `doctor` |
+| **9** | as demand | Migration Factory | One source→target DAG (e.g. AngularJS→modern, or Oracle→Postgres) runs analyzer→mapper→converter→test-gen on a real sample repo and produces a migration report |
+| **7+** | later | Voice, ISO, OVA, WSL tar, Terraform/Helm/SSO | Deferred — documented in `research/v3-implementation-plan.md`, not built until traction demands it |
+
+## Sequencing rules
+
+1. No phase starts before the prior phase's acceptance criteria are green — this is itself dogfooding the verify-gate principle.
+2. Phase 2 (Verification Gate) is the single highest-priority phase after the compose foundation — it is the product's core differentiator (see `CLAUDE.md` goal 3) and the most demo-able artifact for early users.
+3. Anything not in this table (voice, ISO/OVA, enterprise SSO, Terraform/Helm) stays out of scope until a phase is explicitly opened for it — resist scope creep into "Phase 7+" work early; that inversion is exactly the mistake the Aug-2026 research doc flags in the original v3 sequencing.
+
+## Immediate next step
+
+`docs/superpowers/plans/2026-08-21-phase0-compose-foundation.md` — the bite-sized, TDD, file-by-file plan for Phase 0. Execute via `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans`.
