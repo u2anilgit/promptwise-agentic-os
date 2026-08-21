@@ -74,5 +74,16 @@ def pack_remove(name: str) -> None:
     typer.echo(f"removed {name}")
 
 
+@app.command()
+def support_bundle(out: Path = Path("support-bundle.zip")) -> None:
+    """Generate a redacted support bundle for troubleshooting."""
+    from core.config.resolve import resolve_config_auto
+    from core.diagnostics.support_bundle import generate_support_bundle
+
+    config = resolve_config_auto()
+    result = generate_support_bundle(config, out)
+    typer.echo(f"wrote {result}")
+
+
 if __name__ == "__main__":
     app()
