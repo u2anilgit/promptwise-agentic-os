@@ -21,6 +21,7 @@ class HardwareProfile(BaseModel):
     available_ram_gb: float
     cpu_count: int
     has_gpu: bool
+    ram_detected: bool = True
 
 
 def _ram_windows() -> tuple[float, float]:
@@ -71,11 +72,18 @@ def _detect_gpu() -> bool:
 
 def detect_hardware() -> HardwareProfile:
     total_ram_gb, available_ram_gb = _detect_ram()
+    # Only the unknown-platform fallback in _detect_ram() returns exactly
+    # (0.0, 0.0) — a real machine reporting 0.0 available RAM would still
+    # report a nonzero total. Treat that specific pair as "RAM undetected"
+    # so callers (e.g. the router's RAM watchdog) don't mistake it for a
+    # genuine zero-RAM reading and silently escalate to a cloud tier.
+    ram_detected = not (total_ram_gb == 0.0 and available_ram_gb == 0.0)
     return HardwareProfile(
         total_ram_gb=round(total_ram_gb, 1),
         available_ram_gb=round(available_ram_gb, 1),
         cpu_count=os.cpu_count() or 1,
         has_gpu=_detect_gpu(),
+        ram_detected=ram_detected,
     )
 
 

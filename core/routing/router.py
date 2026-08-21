@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from core.config.resolve import resolve_config_auto
 from core.diagnostics.hardware import HardwareProfile, detect_hardware
-from core.routing.catalog import TIER_ORDER, load_catalog
+from core.routing.catalog import load_catalog, tier_order
 from core.routing.models import ModelTier
 
 
@@ -28,10 +28,11 @@ class RoutingDecision(BaseModel):
     model_id: str
     reason: str
     fallback_applied: bool
+    privacy_forced: bool = False
 
 
 def _eligible_tiers(catalog: dict[str, ModelTier], local_only: bool) -> list[str]:
-    ordered = [name for name in TIER_ORDER if name in catalog]
+    ordered = [name for name in tier_order(catalog) if name in catalog]
     if local_only:
         ordered = [name for name in ordered if not catalog[name].requires_cloud]
     return ordered
@@ -53,6 +54,17 @@ def route_request(
         raise ValueError("no eligible tiers in catalog for this request — check catalog and local_only/privacy settings")
 
     default_tier = config.get("routing", {}).get("default_tier")
+
+    privacy_forced = False
+    if (
+        local_only
+        and request.preferred_tier
+        and request.preferred_tier in catalog
+        and catalog[request.preferred_tier].requires_cloud
+        and request.preferred_tier not in eligible
+    ):
+        privacy_forced = True
+
     if request.preferred_tier and request.preferred_tier in eligible:
         target = request.preferred_tier
         reason = f"selected {target} (explicitly preferred)"
@@ -63,8 +75,18 @@ def route_request(
         target = eligible[0]
         reason = f"selected {target} (smallest eligible tier)"
 
+    if privacy_forced:
+        reason += " — privacy override: local_only excluded the requested cloud tier"
+
     fallback_applied = False
-    if catalog[target].min_ram_gb > hardware.available_ram_gb:
+    if not hardware.ram_detected:
+        # Unknown RAM (sentinel 0.0/0.0) — never attempt the watchdog
+        # comparison, since 0.0 available RAM would otherwise look like
+        # "nothing fits" and silently escalate to whatever cloud tier
+        # happens to be smallest/cheapest. Keep whatever was already
+        # selected via the normal preferred/default/eligible[0] logic.
+        reason += " (RAM could not be detected on this platform — watchdog skipped)"
+    elif catalog[target].min_ram_gb > hardware.available_ram_gb:
         fitting = [name for name in eligible if catalog[name].min_ram_gb <= hardware.available_ram_gb]
         if fitting:
             target = fitting[0]
@@ -88,4 +110,5 @@ def route_request(
         model_id=tier_obj.model_id,
         reason=reason,
         fallback_applied=fallback_applied,
+        privacy_forced=privacy_forced,
     )
