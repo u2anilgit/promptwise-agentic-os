@@ -1,0 +1,35 @@
+# catalog/model_catalog.yaml — Aug-2026 model refresh (docs/research/aug2026-findings.md)
+# Ordered smallest/cheapest to largest/most expensive within each track;
+# core/routing/catalog.py's TIER_ORDER walks these names in this order.
+tiers:
+  local-small:
+    provider: ollama
+    model_id: "llama3.2:3b"
+    min_ram_gb: 4.0
+    requires_cloud: false
+    cost_per_1k_input_usd: 0.0
+    cost_per_1k_output_usd: 0.0
+
+  local-large:
+    provider: ollama
+    model_id: "qwen2.5:14b"
+    min_ram_gb: 12.0
+    requires_cloud: false
+    cost_per_1k_input_usd: 0.0
+    cost_per_1k_output_usd: 0.0
+
+  cloud-cheap:
+    provider: anthropic
+    model_id: "claude-haiku-4-5"
+    min_ram_gb: 0.0
+    requires_cloud: true
+    cost_per_1k_input_usd: 0.001
+    cost_per_1k_output_usd: 0.005
+
+  cloud-premium:
+    provider: anthropic
+    model_id: "claude-sonnet-5"
+    min_ram_gb: 0.0
+    requires_cloud: true
+    cost_per_1k_input_usd: 0.003
+    cost_per_1k_output_usd: 0.015
