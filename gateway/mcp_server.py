@@ -39,6 +39,13 @@ def verify_output(diff: str, spec: str = "", cwd: str = "", ledger_key: str = ""
     """
     from pathlib import Path
 
+    from core.config.resolve import resolve_config_auto
+    from core.policy.tool_registry import is_tool_allowed
+
+    config = resolve_config_auto()
+    if not is_tool_allowed(config, "verify_output"):
+        return {"error": "tool 'verify_output' is not enabled in the tool registry (tool_registry.yaml) — rejected at the boundary"}
+
     result = _verify_output(
         diff=diff,
         spec=spec or None,

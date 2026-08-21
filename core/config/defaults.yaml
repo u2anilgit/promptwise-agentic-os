@@ -5,6 +5,7 @@ routing:
   default_tier: local-small
 policy:
   default_effect: deny
+  tool_registry_path: tool_registry.yaml
 diagnostics:
   log_retention_days: 14
   hardware_profile_path: config/hardware_profile.yaml
