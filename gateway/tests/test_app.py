@@ -66,3 +66,12 @@ def test_cost_report_endpoint_with_no_records():
     response = client.post("/cost-report", json=[])
     assert response.status_code == 200
     assert response.json()["completed_tasks"] == 0
+
+
+def test_cost_report_endpoint_rejects_unknown_tier():
+    response = client.post(
+        "/cost-report",
+        json=[{"tier": "not-a-real-tier", "tokens_in": 100, "tokens_out": 50}],
+    )
+    assert response.status_code == 422
+    assert "not-a-real-tier" in response.json()["detail"]

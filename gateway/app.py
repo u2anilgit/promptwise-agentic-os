@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from core.config.resolve import resolve_config_auto
 from core.diagnostics.checks import run_diagnostics
@@ -40,4 +40,7 @@ def route(request: RouteRequest) -> RoutingDecision:
 @app.post("/cost-report")
 def cost_report_endpoint(records: list[CostRecord]) -> dict:
     catalog = load_catalog()
+    for record in records:
+        if record.tier not in catalog:
+            raise HTTPException(status_code=422, detail=f"unknown tier: {record.tier}")
     return cost_report(records, catalog)
