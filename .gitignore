@@ -7,3 +7,5 @@ packs/installed/*
 !packs/installed/.gitkeep
 config/hardware_profile.yaml
 .promptwise/local.yaml
+.env
+compose/.env

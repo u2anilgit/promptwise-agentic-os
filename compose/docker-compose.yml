@@ -2,16 +2,16 @@ name: promptwise-agentic-os
 
 services:
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-0.3.12}
     ports:
-      - "${OLLAMA_PORT:-11434}:11434"
+      - "${BIND_ADDR:-127.0.0.1}:${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama_data:/root/.ollama
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:${QDRANT_IMAGE_TAG:-v1.11.0}
     ports:
-      - "${QDRANT_PORT:-6333}:6333"
+      - "${BIND_ADDR:-127.0.0.1}:${QDRANT_PORT:-6333}:6333"
     volumes:
       - qdrant_data:/qdrant/storage
 
@@ -20,7 +20,7 @@ services:
       context: ..
       dockerfile: compose/gateway.Dockerfile
     ports:
-      - "${GATEWAY_PORT:-8420}:8000"
+      - "${BIND_ADDR:-127.0.0.1}:${GATEWAY_PORT:-8420}:8000"
     depends_on:
       - ollama
       - qdrant
