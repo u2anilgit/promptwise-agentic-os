@@ -7,3 +7,6 @@ policy:
   default_effect: deny
 diagnostics:
   log_retention_days: 14
+  hardware_profile_path: config/hardware_profile.yaml
+gateway:
+  port: 8000

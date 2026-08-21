@@ -5,6 +5,14 @@ from gateway.app import app
 client = TestClient(app)
 
 
+def test_lifespan_writes_hardware_profile_on_boot(tmp_path, monkeypatch):
+    profile_path = tmp_path / "hardware_profile.yaml"
+    monkeypatch.setenv("PROMPTWISE_DIAGNOSTICS__HARDWARE_PROFILE_PATH", str(profile_path))
+    with TestClient(app):
+        pass
+    assert profile_path.exists()
+
+
 def test_healthz_returns_ok():
     response = client.get("/healthz")
     assert response.status_code == 200

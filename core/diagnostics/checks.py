@@ -2,6 +2,8 @@
 """promptwise doctor — core health checks. docs/MAINTENANCE.md §2."""
 from __future__ import annotations
 
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from core.config.resolve import resolve_config
@@ -54,6 +56,26 @@ def _not_yet_implemented(name: str, phase: str) -> CheckResult:
     return CheckResult(name=name, status="WARN", message=f"not yet implemented — lands in {phase}")
 
 
+def _check_services_gateway() -> CheckResult:
+    port = resolve_config().get("gateway", {}).get("port", 8000)
+    url = f"http://127.0.0.1:{port}/healthz"
+    try:
+        with urllib.request.urlopen(url, timeout=1) as response:  # noqa: S310 — local-only, fixed scheme
+            if response.status == 200:
+                return CheckResult(name="services.gateway", status="PASS", message=f"gateway reachable at 127.0.0.1:{port}")
+            return CheckResult(
+                name="services.gateway",
+                status="WARN",
+                message=f"gateway at 127.0.0.1:{port} returned status {response.status}",
+            )
+    except Exception:  # noqa: BLE001 — doctor must never crash; unreachable is a normal, valid state
+        return CheckResult(
+            name="services.gateway",
+            status="WARN",
+            message=f"gateway not reachable at 127.0.0.1:{port} — normal if not yet started",
+        )
+
+
 def run_diagnostics(config: dict | None = None) -> list[CheckResult]:
     return [
         _check_hardware_ram(),
@@ -63,4 +85,5 @@ def run_diagnostics(config: dict | None = None) -> list[CheckResult]:
         _not_yet_implemented("services.qdrant", "Phase 4"),
         _not_yet_implemented("policy.load", "Phase 3"),
         _not_yet_implemented("audit.chain", "Phase 3"),
+        _check_services_gateway(),
     ]

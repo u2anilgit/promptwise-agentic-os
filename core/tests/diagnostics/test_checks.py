@@ -13,6 +13,7 @@ def test_run_diagnostics_returns_all_check_names():
         "services.qdrant",
         "policy.load",
         "audit.chain",
+        "services.gateway",
     }
 
 
@@ -45,3 +46,9 @@ def test_unimplemented_checks_warn_not_fail():
 def test_no_failures_means_clean_exit():
     results = run_diagnostics()
     assert not any(r.status == "FAIL" for r in results)
+
+
+def test_services_gateway_check_never_fails_or_raises():
+    results = run_diagnostics()
+    gateway_check = next(r for r in results if r.name == "services.gateway")
+    assert gateway_check.status in ("PASS", "WARN")
