@@ -3,7 +3,7 @@ from pathlib import Path
 
 import typer
 
-from core.diagnostics.checks import run_diagnostics
+import core.diagnostics.checks as diagnostics_checks
 from core.diagnostics.hardware import detect_hardware, write_hardware_profile
 
 app = typer.Typer(help="PromptWise Agentic OS — operator CLI")
@@ -14,7 +14,7 @@ DEFAULT_PROFILE_PATH = Path("config/hardware_profile.yaml")
 @app.command()
 def doctor() -> None:
     """Run all health checks. Exit 0 unless any check FAILs."""
-    results = run_diagnostics()
+    results = diagnostics_checks.run_diagnostics()
     has_failure = False
     for result in results:
         typer.echo(f"[{result.status}] {result.name} — {result.message}")

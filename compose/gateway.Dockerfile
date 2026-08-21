@@ -5,6 +5,8 @@ COPY pyproject.toml ./
 COPY core ./core
 COPY gateway ./gateway
 COPY scripts ./scripts
+COPY catalog ./catalog
+COPY packs/installed ./packs/installed
 
 RUN pip install --no-cache-dir -e .
 

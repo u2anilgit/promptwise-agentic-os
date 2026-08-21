@@ -10,3 +10,6 @@ diagnostics:
   hardware_profile_path: config/hardware_profile.yaml
 gateway:
   port: 8000
+paths:
+  packs_installed: packs/installed
+  model_catalog: catalog/model_catalog.yaml

@@ -11,7 +11,6 @@ from core.diagnostics.hardware import detect_hardware
 from core.diagnostics.models import CheckResult
 
 MIN_AVAILABLE_RAM_GB = 4.0
-PACKS_INSTALLED_DIR = Path("packs/installed")
 
 
 def _check_hardware_ram() -> CheckResult:
@@ -49,11 +48,13 @@ def _check_config_resolve() -> CheckResult:
     )
 
 
-def _check_packs_integrity() -> CheckResult:
-    if not PACKS_INSTALLED_DIR.exists():
+def _check_packs_integrity(config: dict | None = None) -> CheckResult:
+    config = config if config is not None else resolve_config_auto()
+    packs_dir = Path(config.get("paths", {}).get("packs_installed", "packs/installed"))
+    if not packs_dir.exists():
         return CheckResult(name="packs.integrity", status="PASS", message="0 packs installed")
-    pack_dirs = [p for p in PACKS_INSTALLED_DIR.iterdir() if p.is_dir()]
-    # Phase 8 adds real manifest validation here; Phase 0 only counts.
+    pack_dirs = [p for p in packs_dir.iterdir() if p.is_dir()]
+    # Phase 8 adds real manifest validation here; Phase 0/1 only counts.
     return CheckResult(name="packs.integrity", status="PASS", message=f"{len(pack_dirs)} packs installed")
 
 
@@ -61,8 +62,9 @@ def _not_yet_implemented(name: str, phase: str) -> CheckResult:
     return CheckResult(name=name, status="WARN", message=f"not yet implemented — lands in {phase}")
 
 
-def _check_services_gateway() -> CheckResult:
-    port = resolve_config_auto().get("gateway", {}).get("port", 8000)
+def _check_services_gateway(config: dict | None = None) -> CheckResult:
+    config = config if config is not None else resolve_config_auto()
+    port = config.get("gateway", {}).get("port", 8000)
     url = f"http://127.0.0.1:{port}/healthz"
     try:
         with urllib.request.urlopen(url, timeout=1) as response:  # noqa: S310 — local-only, fixed scheme
@@ -82,13 +84,14 @@ def _check_services_gateway() -> CheckResult:
 
 
 def run_diagnostics(config: dict | None = None) -> list[CheckResult]:
+    config = config if config is not None else resolve_config_auto()
     return [
         _check_hardware_ram(),
         _check_config_resolve(),
-        _check_packs_integrity(),
+        _check_packs_integrity(config),
         _not_yet_implemented("services.ollama", "Phase 1"),
         _not_yet_implemented("services.qdrant", "Phase 4"),
         _not_yet_implemented("policy.load", "Phase 3"),
         _not_yet_implemented("audit.chain", "Phase 3"),
-        _check_services_gateway(),
+        _check_services_gateway(config),
     ]

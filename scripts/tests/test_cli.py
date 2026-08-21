@@ -23,3 +23,16 @@ def test_profile_writes_hardware_yaml(tmp_path, monkeypatch):
     result = runner.invoke(app, ["profile", "--out", str(out_path)])
     assert result.exit_code == 0
     assert out_path.exists()
+
+
+def test_doctor_exits_one_when_a_check_fails(monkeypatch):
+    import scripts.promptwise as promptwise_module
+    from core.diagnostics.models import CheckResult
+
+    def _broken_diagnostics(config=None):
+        return [CheckResult(name="hardware.ram", status="FAIL", message="simulated failure for test")]
+
+    monkeypatch.setattr(promptwise_module.diagnostics_checks, "run_diagnostics", _broken_diagnostics)
+    result = runner.invoke(app, ["doctor"])
+    assert result.exit_code == 1
+    assert "FAIL" in result.stdout

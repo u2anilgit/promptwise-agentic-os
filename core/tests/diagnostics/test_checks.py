@@ -62,3 +62,15 @@ def test_config_resolve_check_reports_which_root_it_used(tmp_path, monkeypatch):
     config_check = next(r for r in results if r.name == "config.resolve")
     assert config_check.status == "PASS"
     assert str(tmp_path) in config_check.message
+
+
+def test_packs_integrity_uses_configured_path(tmp_path, monkeypatch):
+    from core.diagnostics.checks import _check_packs_integrity
+
+    packs_dir = tmp_path / "custom_packs"
+    packs_dir.mkdir()
+    (packs_dir / "example-pack").mkdir()
+    config = {"paths": {"packs_installed": str(packs_dir)}}
+    result = _check_packs_integrity(config)
+    assert result.status == "PASS"
+    assert "1 packs" in result.message
