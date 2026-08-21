@@ -1,7 +1,9 @@
+# gateway/app.py
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 from core.config.resolve import resolve_config_auto
 from core.diagnostics.checks import run_diagnostics
@@ -9,6 +11,8 @@ from core.diagnostics.hardware import detect_hardware, write_hardware_profile
 from core.routing.catalog import load_catalog
 from core.routing.cost import CostRecord, cost_report
 from core.routing.router import RouteRequest, RoutingDecision, route_request
+from core.verify.gate import verify_output
+from core.verify.models import VerifyResult
 from gateway.healthcheck import is_alive
 
 
@@ -44,3 +48,16 @@ def cost_report_endpoint(records: list[CostRecord]) -> dict:
         if record.tier not in catalog:
             raise HTTPException(status_code=422, detail=f"unknown tier: {record.tier}")
     return cost_report(records, catalog)
+
+
+class VerifyRequest(BaseModel):
+    diff: str
+    spec: str | None = None
+    cwd: str | None = None
+    ledger_key: str | None = None
+
+
+@app.post("/verify", response_model=VerifyResult)
+def verify(request: VerifyRequest) -> VerifyResult:
+    cwd = Path(request.cwd) if request.cwd else None
+    return verify_output(diff=request.diff, spec=request.spec, cwd=cwd, ledger_key=request.ledger_key)

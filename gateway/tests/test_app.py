@@ -75,3 +75,25 @@ def test_cost_report_endpoint_rejects_unknown_tier():
     )
     assert response.status_code == 422
     assert "not-a-real-tier" in response.json()["detail"]
+
+
+def test_verify_endpoint_passes_with_no_test_command_configured(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    response = client.post("/verify", json={"diff": "some change", "spec": "some spec"})
+    assert response.status_code == 200
+    body = response.json()
+    assert "passed" in body
+    assert "results" in body
+
+
+def test_verify_endpoint_accepts_a_cwd_override(tmp_path):
+    (tmp_path / "pass_marker.txt").write_text("ok")
+    response = client.post(
+        "/verify",
+        json={
+            "diff": "d",
+            "spec": "s",
+            "cwd": str(tmp_path),
+        },
+    )
+    assert response.status_code == 200
