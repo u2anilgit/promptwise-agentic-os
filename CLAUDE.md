@@ -71,4 +71,4 @@ scripts/                     ← dev/ops scripts (doctor, support-bundle, migrat
 
 ## Current status
 
-Phase 0 complete: compose foundation (Ollama + Qdrant + FastAPI gateway + `promptwise` CLI + doctor) is implemented and verified live via `docker compose up`. Default gateway host port is `8420` (see `compose/.env.example`). Next action: write the Phase 1 plan (hybrid router + Model Manager) per `docs/ROADMAP.md`.
+Phase 0 complete: compose foundation (Ollama + Qdrant + FastAPI gateway + `promptwise` CLI + doctor) is implemented and verified live via `docker compose up`. Default gateway host port is `8420` (see `compose/.env.example`). Phase 1 complete: hybrid router (`route_request`, RAM watchdog, config-driven tier order), model catalog loader with packaged fallback, and `$/completed-task` cost report are implemented and tested. Next action: write the Phase 2 plan (Verification Gate) per `docs/ROADMAP.md`.

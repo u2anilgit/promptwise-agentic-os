@@ -24,4 +24,4 @@ Mirrors the published artifact's phase plan (source: `research/aug2026-findings.
 
 ## Immediate next step
 
-Phase 0 (`docs/superpowers/plans/2026-08-21-phase0-compose-foundation.md`) is done. The Phase 1 plan (hybrid router + Model Manager) has not been written yet — that's the next step.
+Phase 0 (`docs/superpowers/plans/2026-08-21-phase0-compose-foundation.md`) is done. Phase 1 (`docs/superpowers/plans/2026-08-21-phase1-hybrid-router.md`, hybrid router + Model Manager) is implemented and tested. The Phase 2 plan (Verification Gate) has not been written yet — that's the next step.
