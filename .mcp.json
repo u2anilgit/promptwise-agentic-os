@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "promptwise-agentic-os": {
+      "command": "python",
+      "args": ["-m", "gateway.mcp_server"],
+      "cwd": "."
+    }
+  }
+}

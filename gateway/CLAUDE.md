@@ -28,3 +28,7 @@ gateway/
 - MCP tool registry enforcement happens here at the boundary: an unpinned/unhashed tool call is rejected before it reaches `core.policy.check_policy`, not after.
 - WebSocket audit/cost feed reads from `record_audit`'s append log, never a separate cache that can drift.
 - `healthcheck.py` is what `compose/docker-compose.yml` points its `healthcheck:` directive at — keep it fast (<200ms), no deep checks (those live in `promptwise doctor`).
+
+## MCP Server
+
+Start standalone: `python -m gateway.mcp_server`. Claude Code (and any other MCP-capable client) auto-discovers it via the repo-root `.mcp.json` once this repo is opened as a project — no manual registration needed. It currently exposes one tool, `verify_output` (`gateway/mcp_server.py`), a thin adapter over `core.verify.gate.verify_output`.
