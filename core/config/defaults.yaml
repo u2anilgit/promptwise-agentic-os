@@ -14,6 +14,8 @@ paths:
   packs_installed: packs/installed
   packs_registry: packs/registry
   model_catalog: catalog/model_catalog.yaml
+audit:
+  log_path: .promptwise/audit.jsonl
 verify:
   test_command: ""
   lint_command: ""

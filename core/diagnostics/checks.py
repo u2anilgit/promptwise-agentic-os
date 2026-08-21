@@ -101,6 +101,20 @@ def _check_services_gateway(config: dict | None = None) -> CheckResult:
         )
 
 
+def _check_audit_chain(config: dict | None = None) -> CheckResult:
+    from core.audit.log import verify_chain
+
+    config = config if config is not None else resolve_config_auto()
+    ok, broken_at = verify_chain(config)
+    if ok:
+        return CheckResult(name="audit.chain", status="PASS", message="hash chain unbroken")
+    return CheckResult(
+        name="audit.chain",
+        status="FAIL",
+        message=f"hash chain broken at record index {broken_at} — audit log may have been tampered with",
+    )
+
+
 def run_diagnostics(config: dict | None = None) -> list[CheckResult]:
     config = config if config is not None else resolve_config_auto()
     return [
@@ -110,6 +124,6 @@ def run_diagnostics(config: dict | None = None) -> list[CheckResult]:
         _not_yet_implemented("services.ollama", "Phase 1"),
         _not_yet_implemented("services.qdrant", "Phase 4"),
         _not_yet_implemented("policy.load", "Phase 3"),
-        _not_yet_implemented("audit.chain", "Phase 3"),
+        _check_audit_chain(config),
         _check_services_gateway(config),
     ]
