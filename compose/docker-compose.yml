@@ -1,0 +1,35 @@
+name: promptwise-agentic-os
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: compose/gateway.Dockerfile
+    ports:
+      - "${GATEWAY_PORT:-8420}:8000"
+    depends_on:
+      - ollama
+      - qdrant
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  ollama_data:
+  qdrant_data:
