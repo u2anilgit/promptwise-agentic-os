@@ -6,7 +6,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from core.config.resolve import resolve_config
+from core.config.resolve import resolve_config_auto
 from core.diagnostics.hardware import detect_hardware
 from core.diagnostics.models import CheckResult
 
@@ -36,12 +36,17 @@ def _check_hardware_ram() -> CheckResult:
 
 
 def _check_config_resolve() -> CheckResult:
+    root = Path.cwd()
     try:
-        cfg = resolve_config()
+        cfg = resolve_config_auto(root=root)
         assert cfg["engine"]["name"]
     except Exception as exc:  # noqa: BLE001 — doctor must never crash on a bad config
         return CheckResult(name="config.resolve", status="FAIL", message=f"config failed to resolve: {exc}")
-    return CheckResult(name="config.resolve", status="PASS", message="all config layers merged cleanly")
+    return CheckResult(
+        name="config.resolve",
+        status="PASS",
+        message=f"all config layers merged cleanly (org/project/local discovered under {root})",
+    )
 
 
 def _check_packs_integrity() -> CheckResult:
@@ -57,7 +62,7 @@ def _not_yet_implemented(name: str, phase: str) -> CheckResult:
 
 
 def _check_services_gateway() -> CheckResult:
-    port = resolve_config().get("gateway", {}).get("port", 8000)
+    port = resolve_config_auto().get("gateway", {}).get("port", 8000)
     url = f"http://127.0.0.1:{port}/healthz"
     try:
         with urllib.request.urlopen(url, timeout=1) as response:  # noqa: S310 — local-only, fixed scheme

@@ -52,3 +52,13 @@ def test_services_gateway_check_never_fails_or_raises():
     results = run_diagnostics()
     gateway_check = next(r for r in results if r.name == "services.gateway")
     assert gateway_check.status in ("PASS", "WARN")
+
+
+def test_config_resolve_check_reports_which_root_it_used(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from core.diagnostics.checks import run_diagnostics
+
+    results = run_diagnostics()
+    config_check = next(r for r in results if r.name == "config.resolve")
+    assert config_check.status == "PASS"
+    assert str(tmp_path) in config_check.message
