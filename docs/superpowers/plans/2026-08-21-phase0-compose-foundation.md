@@ -848,8 +848,15 @@ CMD ["uvicorn", "gateway.app:app", "--host", "0.0.0.0", "--port", "8000"]
 
 - [ ] **Step 2: Write `compose/.env.example`**
 
+Host-side gateway port defaults to `8420`, not `8000` — `8000`/`8080` collide
+with common backend dev servers (Django, PHP built-in server, many Java
+stacks), `3000`/`5000` collide with common frontend/Flask defaults. `8420` is
+gateway-internal only (see Dockerfile/compose below, which still use `8000`
+*inside* the container — only the host-facing mapping changes), avoids all
+of the above, and is still trivially overridable per-deployment via `.env`.
+
 ```
-GATEWAY_PORT=8000
+GATEWAY_PORT=8420
 OLLAMA_PORT=11434
 QDRANT_PORT=6333
 ```
@@ -879,7 +886,7 @@ services:
       context: ..
       dockerfile: compose/gateway.Dockerfile
     ports:
-      - "${GATEWAY_PORT:-8000}:8000"
+      - "${GATEWAY_PORT:-8420}:8000"
     depends_on:
       - ollama
       - qdrant
@@ -901,7 +908,7 @@ Expected: three containers running; `docker compose -f compose/docker-compose.ym
 
 - [ ] **Step 5: Verify the gateway is reachable**
 
-Run: `curl http://localhost:8000/healthz`
+Run: `curl http://localhost:8420/healthz`
 Expected: `{"status":"ok"}`
 
 - [ ] **Step 6: Tear down**
