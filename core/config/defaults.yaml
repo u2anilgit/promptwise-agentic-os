@@ -13,3 +13,10 @@ gateway:
 paths:
   packs_installed: packs/installed
   model_catalog: catalog/model_catalog.yaml
+verify:
+  test_command: ""
+  lint_command: ""
+  lint_blocks: false
+  semgrep_config: "auto"
+  max_identical_failures: 3
+  failure_ledger_path: .promptwise/failure_ledger.json

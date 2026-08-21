@@ -1,0 +1,2 @@
+verify:
+  test_command: "pytest -q"
