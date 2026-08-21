@@ -20,3 +20,4 @@ verify:
   semgrep_config: "auto"
   max_identical_failures: 3
   failure_ledger_path: .promptwise/failure_ledger.json
+  max_output_chars: 4000
