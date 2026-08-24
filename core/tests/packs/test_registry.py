@@ -1,9 +1,33 @@
+import os
+import tempfile
+from pathlib import Path
+
 import pytest
 from core.packs.registry import (
     install_pack,
     list_installed_packs,
     remove_pack,
     PackInstallError,
+)
+
+
+def _symlinks_supported() -> bool:
+    """Symlink creation needs a privilege the sandbox may not have (e.g.
+    Windows without Developer Mode/admin) — probe once at collection time,
+    same convention as this project's semgrep/gitleaks skipif tests."""
+    with tempfile.TemporaryDirectory() as probe_root:
+        target = Path(probe_root) / "target"
+        target.mkdir()
+        link = Path(probe_root) / "link"
+        try:
+            os.symlink(target, link, target_is_directory=True)
+            return True
+        except OSError:
+            return False
+
+
+requires_symlinks = pytest.mark.skipif(
+    not _symlinks_supported(), reason="symlinks not supported in this environment"
 )
 
 VALID_YAML = """\
@@ -166,3 +190,43 @@ def test_list_installed_reports_malformed_yaml_without_raising(tmp_path):
     manifest, error = by_dirname["malformed-pack"]
     assert manifest is None
     assert error is not None
+
+
+@requires_symlinks
+def test_list_installed_ignores_a_symlinked_directory(tmp_path):
+    """A symlinked entry under packs/installed must not count as an
+    installed pack — an installed pack is a real copy (install_pack always
+    copytree's), and a symlink there could point anywhere on disk outside
+    the governed install directory."""
+    _make_registry_pack(tmp_path)
+    install_pack("sample-pack", config=_config(), root=tmp_path)
+
+    real_target = tmp_path / "outside-target"
+    real_target.mkdir()
+    (real_target / "pack.yaml").write_text(VALID_YAML.replace("sample-pack", "linked-pack"), encoding="utf-8")
+    link = tmp_path / "packs" / "installed" / "linked-pack"
+    os.symlink(real_target, link, target_is_directory=True)
+
+    results = list_installed_packs(config=_config(), root=tmp_path)
+    names = {pack_dir.name for pack_dir, _, _ in results}
+    assert names == {"sample-pack"}
+
+
+@requires_symlinks
+def test_remove_unlinks_a_symlinked_install_without_deleting_the_target(tmp_path):
+    """remove_pack on a symlinked packs/installed/<name> must remove just
+    the symlink, not shutil.rmtree through it into whatever it points at
+    (rmtree on a symlink normally raises OSError; even if it didn't, that
+    would delete arbitrary content outside the governed install dir)."""
+    real_target = tmp_path / "outside-target"
+    real_target.mkdir()
+    (real_target / "keepme.txt").write_text("do not delete", encoding="utf-8")
+    link = tmp_path / "packs" / "installed" / "linked-pack"
+    link.parent.mkdir(parents=True)
+    os.symlink(real_target, link, target_is_directory=True)
+
+    removed = remove_pack("linked-pack", config=_config(), root=tmp_path)
+    assert removed is True
+    assert not link.exists()
+    assert real_target.exists()  # the symlink target itself must survive
+    assert (real_target / "keepme.txt").exists()

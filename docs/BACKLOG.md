@@ -10,7 +10,7 @@ Each entry: what, why it matters, where it came from, status.
 
 Final whole-branch review findings not fixed before merge (see `docs/superpowers/plans/2026-08-24-pack-loader-foundation.md` and the design spec it implements, `docs/superpowers/specs/2026-08-24-repo-intelligence-methodology-packs-design.md`).
 
-- [ ] **Symlink handling unconsidered** — `list_installed_packs` uses `p.is_dir()` (follows symlinks, so a symlinked dir counts as an installed pack); `remove_pack`'s `shutil.rmtree` on a symlinked `packs/installed/<name>` raises rather than reporting cleanly. *Not yet fixed — lowest-priority item, deliberately left for a future pass.*
+- [x] **Symlink handling unconsidered** — fixed 2026-08-24. `list_installed_packs` now excludes symlinked entries (`is_dir() and not is_symlink()`) instead of counting them as installed packs; `remove_pack` now `unlink()`s a symlinked `packs/installed/<name>` instead of calling `shutil.rmtree` through it (which either raises or, worse, would delete whatever the link points at). Regression tests added, gated behind a symlink-capability probe (same skipif convention as the semgrep/gitleaks tests) since this dev environment lacks the Windows privilege to create symlinks — untested by CI/this session, verify on a symlink-capable machine before relying on it in production.
 - [ ] **`dependencies` parsed but never resolved, `check_policy` capability registration not built** — both explicitly out of scope per the pack-loader-foundation spec, deferred to Phase 3. `install_pack` will happily install a pack whose declared deps are absent. `ARCHITECTURE.md` §3 now carries a status note flagging this as open (fixed 2026-08-24).
 
 ### Repo-intelligence / methodology packs (blocked, tracked here so it isn't lost)

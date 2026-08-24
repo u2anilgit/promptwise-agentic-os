@@ -56,7 +56,13 @@ def list_installed_packs(
     if not installed_dir.exists():
         return []
     results: list[tuple[Path, PackManifest | None, str | None]] = []
-    for pack_dir in sorted(p for p in installed_dir.iterdir() if p.is_dir()):
+    # A symlinked entry doesn't count as installed: install_pack always
+    # copytree's a real directory, so a symlink here can only be something
+    # placed outside the governed install flow — possibly pointing outside
+    # installed_dir entirely. Treat it the same as "not a pack", not as an
+    # error (matches the never-crash doctor convention this module follows
+    # elsewhere).
+    for pack_dir in sorted(p for p in installed_dir.iterdir() if p.is_dir() and not p.is_symlink()):
         try:
             manifest = load_pack_manifest(pack_dir)
             results.append((pack_dir, manifest, None))
@@ -110,6 +116,13 @@ def install_pack(name: str, config: dict | None = None, root: Path | None = None
 def remove_pack(name: str, config: dict | None = None, root: Path | None = None) -> bool:
     _validate_name(name)
     dest_dir = _installed_dir(config, root) / name
+    if dest_dir.is_symlink():
+        # shutil.rmtree refuses to operate on a symlink (raises OSError) —
+        # and even if it didn't, recursing through it would delete
+        # whatever it points at, which may be outside the governed
+        # install dir entirely. Remove just the link.
+        dest_dir.unlink()
+        return True
     if not dest_dir.exists():
         return False
     shutil.rmtree(dest_dir)
