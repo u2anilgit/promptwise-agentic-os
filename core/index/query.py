@@ -54,7 +54,7 @@ def query_code_index(
     config: dict[str, Any] | None = None,
 ) -> list[CodeLocation]:
     root = root if root is not None else Path.cwd()
-    if not root.exists():
+    if not root.is_dir():
         return []
 
     config = config if config is not None else resolve_config_auto(root=root)

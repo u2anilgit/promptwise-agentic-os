@@ -42,6 +42,22 @@ def test_parse_file_unknown_extension_returns_empty(tmp_path):
     assert parse_file(unknown) == []
 
 
+def test_parse_file_survives_an_unreadable_file(tmp_path, monkeypatch):
+    """A permission-denied file, a broken symlink, or a file that vanishes
+    between the walk and the read is a handled state, not an exception —
+    same convention as the directory-level PermissionError handling in
+    core/index/query.py's walk."""
+    py_file = tmp_path / "locked.py"
+    py_file.write_text("def foo():\n    pass\n", encoding="utf-8")
+
+    def raising_read_bytes(self):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(Path, "read_bytes", raising_read_bytes)
+
+    assert parse_file(py_file) == []
+
+
 def test_parse_file_tolerates_a_syntax_error(tmp_path):
     # tree-sitter's error recovery should still find `foo` even though the
     # file overall doesn't parse cleanly.

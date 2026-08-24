@@ -45,7 +45,13 @@ def parse_file(path: Path) -> list[CodeLocation]:
     if spec is None:
         return []
 
-    source = path.read_bytes()
+    try:
+        source = path.read_bytes()
+    except OSError:
+        # permission-denied, a broken symlink, or the file vanishing
+        # between the walk's stat() and this read — a handled state, not
+        # an exception; see the module docstring's error-tolerance note.
+        return []
     parser = Parser(spec.language)
     tree = parser.parse(source)
     cursor = QueryCursor(spec.query)

@@ -50,6 +50,35 @@ def test_query_code_index_on_missing_root_returns_empty(tmp_path):
     assert query_code_index("anything", root=missing) == []
 
 
+def test_query_code_index_on_root_that_is_a_file_returns_empty(tmp_path):
+    """root.exists() is true for a file too — must check is_dir(), not
+    just existence, or open_store's `.promptwise` mkdir raises."""
+    a_file = tmp_path / "not_a_directory.py"
+    _write(a_file, "def alpha():\n    pass\n")
+    assert query_code_index("alpha", root=a_file) == []
+
+
+def test_query_code_index_survives_an_unreadable_file(tmp_path, monkeypatch):
+    """A file-level I/O error (permission-denied, broken symlink, vanish
+    race between stat() and read) must not abort the whole query — the
+    file-level twin of the directory-level PermissionError handling."""
+    _write(tmp_path / "good.py", "def alpha():\n    pass\n")
+    _write(tmp_path / "locked.py", "def beta():\n    pass\n")
+
+    real_read_bytes = Path.read_bytes
+
+    def flaky_read_bytes(self):
+        if self.name == "locked.py":
+            raise PermissionError("denied")
+        return real_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", flaky_read_bytes)
+
+    results = query_code_index("alpha", root=tmp_path)
+    assert len(results) == 1
+    assert results[0].symbol == "alpha"
+
+
 def test_query_code_index_symbol_not_found_returns_empty(tmp_path):
     _write(tmp_path / "a.py", "def alpha():\n    pass\n")
     assert query_code_index("nonexistent_symbol", root=tmp_path) == []
