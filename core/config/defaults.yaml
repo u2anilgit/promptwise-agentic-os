@@ -18,6 +18,13 @@ paths:
   policies_dir: policies
 audit:
   log_path: .promptwise/audit.jsonl
+memory:
+  db_path: .promptwise/memory.sqlite3
+  qdrant_url: http://127.0.0.1:6333
+  ollama_base_url: http://127.0.0.1:11434
+  embedding_model: nomic-embed-text
+  embedding_dim: 768
+  extraction_tier_hint: local-small
 verify:
   test_command: ""
   lint_command: ""
