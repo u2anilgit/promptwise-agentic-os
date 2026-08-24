@@ -23,3 +23,22 @@ def test_redacts_a_bearer_token():
     text = "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc.def"
     redacted = redact_secrets(text)
     assert "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" not in redacted
+
+
+from core.diagnostics.redact import contains_pii
+
+
+def test_contains_pii_detects_an_email_address():
+    assert contains_pii("contact me at jane.doe@example.com") is True
+
+
+def test_contains_pii_detects_a_phone_number():
+    assert contains_pii("call 555-123-4567 for details") is True
+
+
+def test_contains_pii_detects_an_existing_secret_pattern():
+    assert contains_pii("api_key: sk-ant-abcdefghijklmnopqrstuvwx") is True
+
+
+def test_contains_pii_false_for_ordinary_text():
+    assert contains_pii("user prefers pytest over unittest") is False
