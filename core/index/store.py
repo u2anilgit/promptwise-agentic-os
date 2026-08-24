@@ -32,7 +32,12 @@ CREATE INDEX IF NOT EXISTS idx_code_index_file ON code_index(file);
 def open_store(config: dict[str, Any], root: Path | None = None) -> sqlite3.Connection:
     db_path = resolve_path(config, "index.db_path", ".promptwise/code_index.sqlite3", root=root)
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    # timeout: how long a writer waits on another connection's lock before
+    # raising `database is locked`, instead of the sqlite3 default of 5s.
+    # WAL mode lets concurrent readers proceed without blocking on a writer
+    # — relevant once this verb is called from concurrent MCP requests.
+    conn = sqlite3.connect(db_path, timeout=30.0)
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_SCHEMA)
     conn.commit()
     return conn
