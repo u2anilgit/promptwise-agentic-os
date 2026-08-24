@@ -41,7 +41,11 @@ def verify_output(
     config: dict[str, Any] | None = None,
     ledger_key: str | None = None,
 ) -> VerifyResult:
-    config = config if config is not None else resolve_config_auto()
+    # Resolve the *target* project's config (`cwd`), not the calling
+    # process's own cwd — an MCP caller runs inside the gateway process,
+    # which may sit anywhere relative to the project actually being
+    # verified.
+    config = config if config is not None else resolve_config_auto(root=cwd)
 
     test_result = run_tests(config, cwd)
     lint_result = run_lint(config, cwd)
