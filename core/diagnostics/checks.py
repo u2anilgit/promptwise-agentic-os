@@ -6,7 +6,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from core.config.resolve import resolve_config_auto, resolve_path
+from core.config.resolve import resolve_config_auto
 from core.diagnostics.hardware import detect_hardware
 from core.diagnostics.models import CheckResult
 
@@ -49,20 +49,21 @@ def _check_config_resolve() -> CheckResult:
 
 
 def _check_packs_integrity(config: dict | None = None) -> CheckResult:
+    from core.packs.registry import list_installed_packs  # local import: avoids a diagnostics->packs->config import cycle at module load time
+
     config = config if config is not None else resolve_config_auto()
-    packs_dir = resolve_path(config, "paths.packs_installed", "packs/installed")
-    if not packs_dir.exists():
+    results = list_installed_packs(config=config)
+    invalid = [(pack_dir, error) for pack_dir, manifest, error in results if error is not None]
+    if invalid:
+        details = "; ".join(f"{pack_dir.name}: {error}" for pack_dir, error in invalid)
         return CheckResult(
             name="packs.integrity",
-            status="WARN",
-            message=(
-                f"packs directory not found at {packs_dir} — 0 packs assumed, or this doctor "
-                "run's cwd/config root may be wrong"
-            ),
+            status="FAIL",
+            message=f"{len(invalid)} of {len(results)} installed packs failed validation — {details}",
         )
-    pack_dirs = [p for p in packs_dir.iterdir() if p.is_dir()]
-    # Phase 8 adds real manifest validation here; Phase 0/1 only counts.
-    return CheckResult(name="packs.integrity", status="PASS", message=f"{len(pack_dirs)} packs installed")
+    count = len(results)
+    noun = "pack" if count == 1 else "packs"
+    return CheckResult(name="packs.integrity", status="PASS", message=f"{count} {noun} installed, all valid")
 
 
 def _not_yet_implemented(name: str, phase: str) -> CheckResult:

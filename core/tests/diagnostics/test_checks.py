@@ -64,34 +64,90 @@ def test_config_resolve_check_reports_which_root_it_used(tmp_path, monkeypatch):
     assert str(tmp_path) in config_check.message
 
 
+_EXAMPLE_PACK_MANIFEST = (
+    "name: example-pack\n"
+    "version: 1.0.0\n"
+    "kind: intelligence\n"
+    "summary: test\n"
+    'requires_core: ">=0.0.0,<1.0.0"\n'
+    "permissions_rationale: none needed\n"
+)
+
+
 def test_packs_integrity_uses_configured_path(tmp_path, monkeypatch):
     from core.diagnostics.checks import _check_packs_integrity
 
     packs_dir = tmp_path / "custom_packs"
-    packs_dir.mkdir()
-    (packs_dir / "example-pack").mkdir()
+    pack_dir = packs_dir / "example-pack"
+    pack_dir.mkdir(parents=True)
+    (pack_dir / "pack.yaml").write_text(_EXAMPLE_PACK_MANIFEST, encoding="utf-8")
     config = {"paths": {"packs_installed": str(packs_dir)}}
     result = _check_packs_integrity(config)
     assert result.status == "PASS"
-    assert "1 packs" in result.message
+    assert "1 pack" in result.message
 
 
-def test_packs_integrity_warns_when_directory_does_not_exist(tmp_path):
+def test_packs_integrity_passes_when_directory_does_not_exist(tmp_path):
+    # list_installed_packs treats a missing install dir as zero packs, not
+    # an error — real manifest validation (this task) only fires per-pack.
     from core.diagnostics.checks import _check_packs_integrity
 
     missing_dir = tmp_path / "no-such-packs-dir"
     config = {"paths": {"packs_installed": str(missing_dir)}}
     result = _check_packs_integrity(config)
-    assert result.status == "WARN"
-    assert str(missing_dir) in result.message
+    assert result.status == "PASS"
+    assert "0 packs" in result.message
 
 
 def test_packs_integrity_resolves_relative_configured_path_against_root(tmp_path, monkeypatch):
     from core.diagnostics.checks import _check_packs_integrity
 
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "packs" / "installed" / "example-pack").mkdir(parents=True)
+    pack_dir = tmp_path / "packs" / "installed" / "example-pack"
+    pack_dir.mkdir(parents=True)
+    (pack_dir / "pack.yaml").write_text(_EXAMPLE_PACK_MANIFEST, encoding="utf-8")
     config = {"paths": {"packs_installed": "packs/installed"}}
     result = _check_packs_integrity(config)
     assert result.status == "PASS"
-    assert "1 packs" in result.message
+    assert "1 pack" in result.message
+
+
+def test_packs_integrity_passes_with_zero_packs(tmp_path):
+    from core.diagnostics.checks import _check_packs_integrity
+
+    config = {"paths": {"packs_installed": str(tmp_path / "packs" / "installed")}}
+    result = _check_packs_integrity(config)
+    assert result.status == "PASS"
+    assert "0 packs" in result.message
+
+
+def test_packs_integrity_passes_with_one_valid_pack(tmp_path):
+    from core.diagnostics.checks import _check_packs_integrity
+
+    pack_dir = tmp_path / "packs" / "installed" / "sample-pack"
+    pack_dir.mkdir(parents=True)
+    (pack_dir / "pack.yaml").write_text(
+        "name: sample-pack\n"
+        "version: 1.0.0\n"
+        "kind: intelligence\n"
+        "summary: test\n"
+        'requires_core: ">=0.0.0,<1.0.0"\n'
+        "permissions_rationale: none needed\n",
+        encoding="utf-8",
+    )
+    config = {"paths": {"packs_installed": str(tmp_path / "packs" / "installed")}}
+    result = _check_packs_integrity(config)
+    assert result.status == "PASS"
+    assert "1 pack" in result.message
+
+
+def test_packs_integrity_fails_with_invalid_manifest(tmp_path):
+    from core.diagnostics.checks import _check_packs_integrity
+
+    pack_dir = tmp_path / "packs" / "installed" / "broken-pack"
+    pack_dir.mkdir(parents=True)
+    (pack_dir / "pack.yaml").write_text("name: only-a-name\n", encoding="utf-8")
+    config = {"paths": {"packs_installed": str(tmp_path / "packs" / "installed")}}
+    result = _check_packs_integrity(config)
+    assert result.status == "FAIL"
+    assert "broken-pack" in result.message
