@@ -61,7 +61,7 @@ packs/registry/<pack-name>/
 ```yaml
 name: stack-python-fastapi
 version: 1.0.0
-kind: stack            # stack | database | cloud-devops | architecture | migration | lifecycle
+kind: stack            # stack | database | cloud-devops | architecture | migration | lifecycle | intelligence
 summary: Python/FastAPI conventions, verify rules, and model-tier preferences
 requires_core: ">=0.1.0,<0.2.0"
 capabilities:            # declared least-privilege — enforced by check_policy at install AND runtime
@@ -83,6 +83,7 @@ dependencies: []          # other pack names this one requires
 | Database packs | schema docs, governed text-to-SQL, migration+rollback, query opt | `check_policy` (DB ops), memory |
 | Cloud/DevOps packs | IaC gen with pre-gen policy validation, CI/CD authoring, drift checks | policy engine, audit, sandbox |
 | Lifecycle packs | requirements capture, EARS criteria, release notes, runbooks | spec engine, audit trail |
+| Intelligence packs | reverse-engineers an existing repo into feature/requirements/architecture/pseudocode/design docs | `orchestrate_tasks`, `rank_context`, code index |
 
 ### Install/discovery mechanism
 

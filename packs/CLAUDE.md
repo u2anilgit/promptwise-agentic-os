@@ -9,7 +9,7 @@ Scoped context. Read root `CLAUDE.md` and `docs/ARCHITECTURE.md` §3 (Pack Contr
 
 ## Authoring checklist (every pack, no exceptions)
 
-1. `pack.yaml` — name, version, `kind`, `summary`, `requires_core` semver range, `capabilities` (least privilege — list only what's actually used), `permissions_rationale` (one sentence, human-readable, shown at install-approval time), `dependencies`.
+1. `pack.yaml` — name, version, `kind` (stack | database | cloud-devops | architecture | migration | lifecycle | intelligence), `summary`, `requires_core` semver range, `capabilities` (least privilege — list only what's actually used), `permissions_rationale` (one sentence, human-readable, shown at install-approval time), `dependencies`.
 2. `personas/` — system-prompt fragments, one file per role this pack adds. Plain markdown, no code.
 3. `verify-rules/` — additional lint/test/security rules layered onto `verify_output` for this domain. Must not weaken any core-shipped rule, only add.
 4. `catalog-hints.yaml` — model-tier preferences for this pack's task types (e.g. "SQL generation prefers local-code tier, escalate on schema >50 tables").
