@@ -1,0 +1,9 @@
+# tool_registry.yaml — MCP tool allowlist, docs/ARCHITECTURE.md §2.
+# Every tool the in-process MCP server (gateway/mcp_server.py) exposes
+# must be listed here with enabled: true, or it is rejected at the
+# boundary before core logic ever runs. Flip enabled: false as a kill
+# switch — no code change, no redeploy needed.
+tools:
+  verify_output:
+    version: "0.1.0"
+    enabled: true

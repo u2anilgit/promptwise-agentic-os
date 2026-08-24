@@ -1,0 +1,5 @@
+# policies/default.yaml — docs/ARCHITECTURE.md §2. Empty by default: every
+# action is denied unless a rule here (or a project-level policies file)
+# explicitly allows it. This is intentional — see policy.default_effect
+# in core/config/defaults.yaml.
+rules: []

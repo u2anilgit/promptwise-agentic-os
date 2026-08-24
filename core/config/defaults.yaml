@@ -5,6 +5,7 @@ routing:
   default_tier: local-small
 policy:
   default_effect: deny
+  tool_registry_path: tool_registry.yaml
 diagnostics:
   log_retention_days: 14
   hardware_profile_path: config/hardware_profile.yaml
@@ -14,6 +15,9 @@ paths:
   packs_installed: packs/installed
   packs_registry: packs/registry
   model_catalog: catalog/model_catalog.yaml
+  policies_dir: policies
+audit:
+  log_path: .promptwise/audit.jsonl
 verify:
   test_command: ""
   lint_command: ""

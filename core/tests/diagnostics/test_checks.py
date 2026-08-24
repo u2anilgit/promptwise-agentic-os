@@ -38,9 +38,21 @@ def test_packs_integrity_passes_with_zero_packs():
 
 def test_unimplemented_checks_warn_not_fail():
     results = run_diagnostics()
-    for name in ("services.ollama", "services.qdrant", "policy.load", "audit.chain"):
+    for name in ("services.ollama", "services.qdrant"):
         check = next(r for r in results if r.name == name)
         assert check.status == "WARN"
+
+
+def test_policy_load_check_passes_with_default_policy():
+    results = run_diagnostics()
+    policy_check = next(r for r in results if r.name == "policy.load")
+    assert policy_check.status == "PASS"
+
+
+def test_audit_chain_check_passes_by_default():
+    results = run_diagnostics()
+    audit_check = next(r for r in results if r.name == "audit.chain")
+    assert audit_check.status == "PASS"
 
 
 def test_no_failures_means_clean_exit():
@@ -152,3 +164,22 @@ def test_packs_integrity_fails_with_invalid_manifest(tmp_path):
     result = _check_packs_integrity(config)
     assert result.status == "FAIL"
     assert "broken-pack" in result.message
+
+
+def test_audit_chain_check_passes_on_a_clean_log(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from core.audit.log import record_audit
+    from core.diagnostics.checks import _check_audit_chain
+
+    config = {"audit": {"log_path": str(tmp_path / "audit.jsonl")}}
+    record_audit(config, actor="cli", action="a", target="x", result="allow")
+    result = _check_audit_chain(config)
+    assert result.status == "PASS"
+
+
+def test_audit_chain_check_warns_not_fails_on_missing_log(tmp_path):
+    from core.diagnostics.checks import _check_audit_chain
+
+    config = {"audit": {"log_path": str(tmp_path / "does-not-exist.jsonl")}}
+    result = _check_audit_chain(config)
+    assert result.status in ("PASS", "WARN")  # no log yet is a valid, non-broken state

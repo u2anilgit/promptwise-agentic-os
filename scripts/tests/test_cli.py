@@ -103,3 +103,10 @@ def test_pack_remove_unknown_pack_exits_nonzero(tmp_path, monkeypatch):
     result = runner.invoke(app, ["pack", "remove", "never-installed"])
     assert result.exit_code == 1
     assert "not installed" in result.stdout
+
+
+def test_support_bundle_command_creates_a_zip(tmp_path):
+    out_path = tmp_path / "bundle.zip"
+    result = runner.invoke(app, ["support-bundle", "--out", str(out_path)])
+    assert result.exit_code == 0
+    assert out_path.exists()

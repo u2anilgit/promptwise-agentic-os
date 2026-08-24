@@ -39,3 +39,16 @@ async def test_mcp_call_tool_verify_output_runs_a_real_check(tmp_path):
     payload = json.loads(content_blocks[0].text)
     assert payload["passed"] is True
     assert payload["blocked_reason"] is None
+
+
+async def test_verify_output_tool_is_registered_in_the_tool_registry():
+    """The tool registry (core/policy/tool_registry.py) and the MCP server's
+    actually-registered tools must agree — verify_output must be in both."""
+    import yaml
+    from pathlib import Path
+
+    registry_path = Path("tool_registry.yaml")
+    with registry_path.open("r", encoding="utf-8") as f:
+        registry = yaml.safe_load(f)
+    assert "verify_output" in registry["tools"]
+    assert registry["tools"]["verify_output"]["enabled"] is True
