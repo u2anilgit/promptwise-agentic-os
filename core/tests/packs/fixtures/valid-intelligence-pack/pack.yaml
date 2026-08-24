@@ -1,0 +1,9 @@
+name: valid-intelligence-pack
+version: 1.0.0
+kind: intelligence
+summary: Fixture pack used by core/tests/packs/test_integration.py
+requires_core: ">=0.0.0,<99.0.0"
+capabilities:
+  - fs:read
+permissions_rationale: Fixture only — fs:read declared but never exercised in tests.
+dependencies: []
