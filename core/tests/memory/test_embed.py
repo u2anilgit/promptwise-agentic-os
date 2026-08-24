@@ -29,3 +29,21 @@ def test_embed_text_returns_none_on_a_malformed_response():
         return {"unexpected": "shape"}
 
     assert embed_text("anything", _config(), http_post=malformed_http_post) is None
+
+
+def test_embed_text_returns_none_when_http_post_raises_a_non_oserror():
+    # e.g. json.JSONDecodeError (a ValueError, not an OSError) from a
+    # caller-supplied http_post that failed to parse a non-JSON response
+    # (proxy error page, HTML, etc).
+    def non_json_http_post(url, json_body, timeout=10.0):
+        import json
+        json.loads("not json")
+
+    assert embed_text("anything", _config(), http_post=non_json_http_post) is None
+
+
+def test_embed_text_returns_none_when_response_body_is_not_a_dict():
+    def list_http_post(url, json_body, timeout=10.0):
+        return ["not", "a", "dict"]
+
+    assert embed_text("anything", _config(), http_post=list_http_post) is None

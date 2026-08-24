@@ -94,3 +94,102 @@ def test_query_memory_on_empty_store_returns_empty(tmp_path):
     client = QdrantClient(":memory:")
     assert query_memory("anything", scope="project", root=str(tmp_path), config=config,
                          http_post=_fake_extraction_http_post("unused"), qdrant_client=client) == []
+
+
+class _UnreachableQdrantClient:
+    """Simulates a Qdrant host that cannot even be reached — every method
+    raises, including collection_exists (called from ensure_collection)."""
+
+    def __getattr__(self, name):
+        def _raise(*args, **kwargs):
+            raise OSError("[WinError 10061] No connection could be made")
+        return _raise
+
+
+def test_record_memory_degrades_gracefully_when_qdrant_is_unreachable(tmp_path):
+    config = _config(tmp_path)
+    client = _UnreachableQdrantClient()
+
+    facts = record_memory(
+        "I always use pytest, never unittest", scope="project", root=str(tmp_path),
+        config=config, http_post=_fake_extraction_http_post("user prefers pytest"), qdrant_client=client,
+    )
+
+    assert len(facts) == 1
+    assert facts[0].text == "user prefers pytest"
+
+
+def test_query_memory_degrades_gracefully_when_qdrant_is_unreachable(tmp_path):
+    config = _config(tmp_path)
+    healthy_client = QdrantClient(":memory:")
+    record_memory(
+        "decided: SQLite for dev, Postgres for prod", scope="project", root=str(tmp_path),
+        config=config, http_post=_fake_extraction_http_post("decided: SQLite for dev, Postgres for prod", "decision"),
+        qdrant_client=healthy_client,
+    )
+
+    unreachable_client = _UnreachableQdrantClient()
+    results = query_memory(
+        "SQLite", scope="project", root=str(tmp_path), config=config,
+        http_post=_fake_extraction_http_post("unused"), qdrant_client=unreachable_client,
+    )
+
+    # Qdrant unreachable end-to-end — still resolves via BM25 alone.
+    assert len(results) == 1
+    assert "SQLite" in results[0].text
+
+
+class _CollectionExistsOkThenDiesClient:
+    """Simulates a Qdrant that answers ensure_collection's probe fine but
+    then fails on the actual upsert/search call — the "mid-call" failure
+    mode, distinct from total unreachability."""
+
+    def __init__(self):
+        self._delegate = QdrantClient(":memory:")
+
+    def collection_exists(self, *args, **kwargs):
+        return self._delegate.collection_exists(*args, **kwargs)
+
+    def create_collection(self, *args, **kwargs):
+        return self._delegate.create_collection(*args, **kwargs)
+
+    def upsert(self, *args, **kwargs):
+        raise OSError("qdrant went away")
+
+    def query_points(self, *args, **kwargs):
+        raise OSError("qdrant went away")
+
+
+def test_record_memory_still_saves_fact_when_upsert_fails_mid_call(tmp_path):
+    config = _config(tmp_path)
+    client = _CollectionExistsOkThenDiesClient()
+
+    facts = record_memory(
+        "I always use pytest, never unittest", scope="project", root=str(tmp_path),
+        config=config, http_post=_fake_extraction_http_post("user prefers pytest"), qdrant_client=client,
+    )
+
+    assert len(facts) == 1
+    assert facts[0].text == "user prefers pytest"
+    assert facts[0].id is not None
+
+
+def test_query_memory_degrades_to_bm25_when_vector_search_fails_mid_call(tmp_path):
+    config = _config(tmp_path)
+
+    # Record with a healthy client so the fact is BM25-searchable.
+    healthy_client = QdrantClient(":memory:")
+    record_memory(
+        "decided: SQLite for dev, Postgres for prod", scope="project", root=str(tmp_path),
+        config=config, http_post=_fake_extraction_http_post("decided: SQLite for dev, Postgres for prod", "decision"),
+        qdrant_client=healthy_client,
+    )
+
+    dying_client = _CollectionExistsOkThenDiesClient()
+    results = query_memory(
+        "SQLite", scope="project", root=str(tmp_path), config=config,
+        http_post=_fake_extraction_http_post("unused"), qdrant_client=dying_client,
+    )
+
+    assert len(results) == 1
+    assert "SQLite" in results[0].text

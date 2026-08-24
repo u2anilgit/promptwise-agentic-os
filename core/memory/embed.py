@@ -9,7 +9,6 @@ BM25-only retrieval instead of aborting.
 from __future__ import annotations
 
 import json
-import urllib.error
 import urllib.request
 from typing import Any, Callable
 
@@ -30,7 +29,10 @@ def embed_text(text: str, config: dict[str, Any], http_post: HttpPost = default_
 
     try:
         body = http_post(f"{base_url}/api/embeddings", {"model": model, "prompt": text})
-    except (OSError, urllib.error.URLError, TimeoutError):
+    except Exception:
+        return None
+
+    if not isinstance(body, dict):
         return None
 
     embedding = body.get("embedding")

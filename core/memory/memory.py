@@ -5,6 +5,10 @@ together. Every failure mode inside a single fact's pipeline (embedding
 fails, Qdrant unreachable) degrades that ONE fact to BM25-only rather
 than aborting the whole call — same "handled state, not exception"
 convention as core/index/query.py.
+
+NOTE: scope="session" is not currently filtered by session_id in
+query_memory — a session query returns all facts recorded under that
+scope, not just the calling session's. Tracked in docs/BACKLOG.md.
 """
 from __future__ import annotations
 
@@ -39,13 +43,22 @@ def record_memory(
     http_post: HttpPost = default_http_post,
     qdrant_client: QdrantClient | None = None,
 ) -> list[Fact]:
+    """Extract facts from `text` and persist them (SQLite + best-effort
+    Qdrant vector). NOTE: `session_id` is accepted and persisted here, but
+    query_memory does not currently filter by it — see module docstring.
+    """
     config = config if config is not None else resolve_config_auto(root=Path(root) if root else None)
     conn = open_store(config, root=Path(root) if root else None)
-    client = qdrant_client if qdrant_client is not None else _qdrant_client(config)
-    dim = config.get("memory", {}).get("embedding_dim", 768)
-    ensure_collection(client, dim=dim)
 
     try:
+        client: QdrantClient | None = qdrant_client if qdrant_client is not None else _qdrant_client(config)
+        dim = config.get("memory", {}).get("embedding_dim", 768)
+        vectors_available = True
+        try:
+            ensure_collection(client, dim=dim)
+        except Exception:
+            vectors_available = False
+
         pii = contains_pii(text)
         raw_facts = extract_facts(text, config, http_post=http_post)
 
@@ -54,9 +67,13 @@ def record_memory(
             fact = Fact(text=raw["text"], category=raw["category"], scope=scope, root=root, session_id=session_id, pii=pii, created_at=time.time())
             fact = save_fact(conn, fact)
 
-            vector = embed_text(fact.text, config, http_post=http_post)
-            if vector is not None:
-                upsert_fact(client, fact_id=fact.id, vector=vector, scope=scope, root=root, pii=pii)
+            if vectors_available:
+                vector = embed_text(fact.text, config, http_post=http_post)
+                if vector is not None:
+                    try:
+                        upsert_fact(client, fact_id=fact.id, vector=vector, scope=scope, root=root, pii=pii)
+                    except Exception:
+                        pass
             saved.append(fact)
 
         record_audit(config, actor="record_memory", action=scope, target=root or session_id or "unscoped", result="allow", detail={"fact_count": len(saved), "pii": pii})
@@ -75,21 +92,35 @@ def query_memory(
     http_post: HttpPost = default_http_post,
     qdrant_client: QdrantClient | None = None,
 ) -> list[Fact]:
+    """Fused BM25 + vector retrieval over recorded facts, filtered by
+    `scope` and `root`. NOTE: `scope="session"` is not filtered by
+    session_id here — this returns all facts recorded under that scope,
+    not just the calling session's. Tracked in docs/BACKLOG.md.
+    """
     config = config if config is not None else resolve_config_auto(root=Path(root) if root else None)
     conn = open_store(config, root=Path(root) if root else None)
-    client = qdrant_client if qdrant_client is not None else _qdrant_client(config)
-    dim = config.get("memory", {}).get("embedding_dim", 768)
-    ensure_collection(client, dim=dim)
 
     try:
+        client: QdrantClient | None = qdrant_client if qdrant_client is not None else _qdrant_client(config)
+        dim = config.get("memory", {}).get("embedding_dim", 768)
+        vectors_available = True
+        try:
+            ensure_collection(client, dim=dim)
+        except Exception:
+            vectors_available = False
+
         bm25_facts = search_fts(conn, query, scope=scope, root=root, limit=limit * 2)
         by_id = {f.id: f for f in bm25_facts}
         bm25_ids = [f.id for f in bm25_facts]
 
         vector_ids: list[int] = []
-        query_vector = embed_text(query, config, http_post=http_post)
-        if query_vector is not None:
-            vector_ids = vector_search(client, query_vector, scope=scope, root=root, limit=limit * 2)
+        if vectors_available:
+            query_vector = embed_text(query, config, http_post=http_post)
+            if query_vector is not None:
+                try:
+                    vector_ids = vector_search(client, query_vector, scope=scope, root=root, limit=limit * 2)
+                except Exception:
+                    vector_ids = []
 
         fused_ids = reciprocal_rank_fusion(bm25_ids, vector_ids)
 
