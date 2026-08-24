@@ -45,6 +45,7 @@ docs/
   ARCHITECTURE.md            ← core+pack system design, config layering
   MAINTENANCE.md             ← ops/support/troubleshooting mechanism
   ROADMAP.md                 ← phase plan, acceptance criteria
+  BACKLOG.md                 ← deferred findings, known gaps, quick wins between phases
   research/                  ← source research docs (do not edit, historical record)
   superpowers/plans/         ← dated implementation plans (writing-plans skill output)
 core/            CLAUDE.md   ← Python core engine: routing, policy, memory, verify, audit, spec engine
