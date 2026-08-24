@@ -9,6 +9,8 @@ from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
+from core.packs.semver import InvalidVersionError, parse_version
+
 PackKind = Literal[
     "stack",
     "database",
@@ -43,6 +45,15 @@ class PackManifest(BaseModel):
                 f"pack name {v!r} must be a lowercase slug matching {PACK_NAME_RE.pattern} "
                 "(letters, digits, hyphens only, starting with a letter or digit)"
             )
+        return v
+
+    @field_validator("version")
+    @classmethod
+    def _version_is_valid_semver(cls, v: str) -> str:
+        try:
+            parse_version(v)
+        except InvalidVersionError as exc:
+            raise ValueError(f"pack version {v!r} is not a valid X.Y.Z version: {exc}") from exc
         return v
 
     @field_validator("permissions_rationale")

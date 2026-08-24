@@ -25,48 +25,48 @@ def _make_registry_pack(root, name="sample-pack", contents=VALID_YAML):
     return pack_dir
 
 
-def _config(root):
+def _config():
     return {"paths": {"packs_installed": "packs/installed"}}
 
 
 def test_install_copies_pack_and_returns_manifest(tmp_path):
     _make_registry_pack(tmp_path)
-    manifest = install_pack("sample-pack", config=_config(tmp_path), root=tmp_path)
+    manifest = install_pack("sample-pack", config=_config(), root=tmp_path)
     assert manifest.name == "sample-pack"
     assert (tmp_path / "packs" / "installed" / "sample-pack" / "pack.yaml").exists()
 
 
 def test_install_unknown_pack_raises(tmp_path):
     with pytest.raises(PackInstallError, match="no pack named"):
-        install_pack("does-not-exist", config=_config(tmp_path), root=tmp_path)
+        install_pack("does-not-exist", config=_config(), root=tmp_path)
 
 
 def test_install_rejects_name_mismatch(tmp_path):
     _make_registry_pack(tmp_path, name="dir-name", contents=VALID_YAML)  # pack.yaml says sample-pack
     with pytest.raises(PackInstallError, match="does not match"):
-        install_pack("dir-name", config=_config(tmp_path), root=tmp_path)
+        install_pack("dir-name", config=_config(), root=tmp_path)
 
 
 def test_install_rejects_self_dependency(tmp_path):
     self_dep_yaml = VALID_YAML.replace("dependencies: []", "dependencies: [sample-pack]")
     _make_registry_pack(tmp_path, contents=self_dep_yaml)
     with pytest.raises(PackInstallError, match="itself as a dependency"):
-        install_pack("sample-pack", config=_config(tmp_path), root=tmp_path)
+        install_pack("sample-pack", config=_config(), root=tmp_path)
 
 
 def test_install_rejects_unsafe_name_before_touching_disk(tmp_path):
     with pytest.raises(PackInstallError, match="slug"):
-        install_pack("../../etc", config=_config(tmp_path), root=tmp_path)
+        install_pack("../../etc", config=_config(), root=tmp_path)
 
 
 def test_list_installed_returns_valid_and_invalid(tmp_path):
     _make_registry_pack(tmp_path)
-    install_pack("sample-pack", config=_config(tmp_path), root=tmp_path)
+    install_pack("sample-pack", config=_config(), root=tmp_path)
     broken_dir = tmp_path / "packs" / "installed" / "broken-pack"
     broken_dir.mkdir(parents=True)
     (broken_dir / "pack.yaml").write_text("name: only-a-name\n", encoding="utf-8")
 
-    results = list_installed_packs(config=_config(tmp_path), root=tmp_path)
+    results = list_installed_packs(config=_config(), root=tmp_path)
     by_dirname = {pack_dir.name: (manifest, error) for pack_dir, manifest, error in results}
 
     manifest, error = by_dirname["sample-pack"]
@@ -77,33 +77,90 @@ def test_list_installed_returns_valid_and_invalid(tmp_path):
 
 
 def test_list_installed_empty_when_dir_missing(tmp_path):
-    results = list_installed_packs(config=_config(tmp_path), root=tmp_path)
+    results = list_installed_packs(config=_config(), root=tmp_path)
     assert results == []
 
 
 def test_remove_deletes_installed_pack(tmp_path):
     _make_registry_pack(tmp_path)
-    install_pack("sample-pack", config=_config(tmp_path), root=tmp_path)
-    removed = remove_pack("sample-pack", config=_config(tmp_path), root=tmp_path)
+    install_pack("sample-pack", config=_config(), root=tmp_path)
+    removed = remove_pack("sample-pack", config=_config(), root=tmp_path)
     assert removed is True
     assert not (tmp_path / "packs" / "installed" / "sample-pack").exists()
 
 
 def test_remove_returns_false_when_not_installed(tmp_path):
-    removed = remove_pack("never-installed", config=_config(tmp_path), root=tmp_path)
+    removed = remove_pack("never-installed", config=_config(), root=tmp_path)
     assert removed is False
+
+
+def test_install_reinstalls_over_existing_directory(tmp_path):
+    _make_registry_pack(tmp_path)
+    install_pack("sample-pack", config=_config(), root=tmp_path)
+    installed_dir = tmp_path / "packs" / "installed" / "sample-pack"
+    stale_file = installed_dir / "stale-leftover.txt"
+    stale_file.write_text("should be gone after reinstall", encoding="utf-8")
+
+    manifest = install_pack("sample-pack", config=_config(), root=tmp_path)
+
+    assert manifest.name == "sample-pack"
+    assert (installed_dir / "pack.yaml").exists()
+    assert not stale_file.exists()  # reinstall replaces the directory wholesale
+
+
+def test_install_failed_copy_leaves_existing_install_untouched(tmp_path, monkeypatch):
+    _make_registry_pack(tmp_path)
+    install_pack("sample-pack", config=_config(), root=tmp_path)
+    installed_dir = tmp_path / "packs" / "installed" / "sample-pack"
+    original_manifest_text = (installed_dir / "pack.yaml").read_text(encoding="utf-8")
+
+    import shutil as shutil_module
+
+    real_copytree = shutil_module.copytree
+
+    def _flaky_copytree(src, dst, *args, **kwargs):
+        raise OSError("simulated copy failure")
+
+    monkeypatch.setattr(shutil_module, "copytree", _flaky_copytree)
+    try:
+        with pytest.raises(OSError, match="simulated copy failure"):
+            install_pack("sample-pack", config=_config(), root=tmp_path)
+    finally:
+        monkeypatch.setattr(shutil_module, "copytree", real_copytree)
+
+    # The original install must still be intact — a failed reinstall must
+    # not have deleted it before the copy was known to succeed.
+    assert installed_dir.exists()
+    assert (installed_dir / "pack.yaml").read_text(encoding="utf-8") == original_manifest_text
+
+
+def test_install_honors_configured_packs_registry_path(tmp_path):
+    custom_registry = tmp_path / "somewhere-else" / "registry"
+    pack_dir = custom_registry / "sample-pack"
+    pack_dir.mkdir(parents=True)
+    (pack_dir / "pack.yaml").write_text(VALID_YAML, encoding="utf-8")
+
+    config = {
+        "paths": {
+            "packs_installed": "packs/installed",
+            "packs_registry": str(custom_registry),
+        }
+    }
+    manifest = install_pack("sample-pack", config=config, root=tmp_path)
+    assert manifest.name == "sample-pack"
+    assert (tmp_path / "packs" / "installed" / "sample-pack" / "pack.yaml").exists()
 
 
 def test_list_installed_reports_malformed_yaml_without_raising(tmp_path):
     _make_registry_pack(tmp_path)
-    install_pack("sample-pack", config=_config(tmp_path), root=tmp_path)
+    install_pack("sample-pack", config=_config(), root=tmp_path)
     malformed_dir = tmp_path / "packs" / "installed" / "malformed-pack"
     malformed_dir.mkdir(parents=True)
     (malformed_dir / "pack.yaml").write_text(
         "name: [unbalanced\n  bad indentation:\nfoo\n", encoding="utf-8"
     )
 
-    results = list_installed_packs(config=_config(tmp_path), root=tmp_path)
+    results = list_installed_packs(config=_config(), root=tmp_path)
     by_dirname = {pack_dir.name: (manifest, error) for pack_dir, manifest, error in results}
 
     manifest, error = by_dirname["malformed-pack"]

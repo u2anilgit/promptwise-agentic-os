@@ -8,6 +8,7 @@ long-lived pack registry in memory across calls).
 from __future__ import annotations
 
 import shutil
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -36,9 +37,10 @@ def _installed_dir(config: dict | None, root: Path | None) -> Path:
     return resolve_path(config, "paths.packs_installed", "packs/installed", root=resolved_root)
 
 
-def _registry_dir(root: Path | None) -> Path:
-    root = root if root is not None else Path.cwd()
-    return root / "packs" / REGISTRY_DIRNAME
+def _registry_dir(config: dict | None, root: Path | None) -> Path:
+    resolved_root = root if root is not None else Path.cwd()
+    config = config if config is not None else resolve_config_auto(root=resolved_root)
+    return resolve_path(config, "paths.packs_registry", f"packs/{REGISTRY_DIRNAME}", root=resolved_root)
 
 
 def list_installed_packs(
@@ -66,9 +68,10 @@ def list_installed_packs(
 def install_pack(name: str, config: dict | None = None, root: Path | None = None) -> PackManifest:
     _validate_name(name)  # before any path is built or touched
     resolved_root = root if root is not None else Path.cwd()
-    source_dir = _registry_dir(resolved_root) / name
+    registry_dir = _registry_dir(config, resolved_root)
+    source_dir = registry_dir / name
     if not source_dir.exists():
-        raise PackInstallError(f"no pack named {name!r} in {_registry_dir(resolved_root)}")
+        raise PackInstallError(f"no pack named {name!r} in {registry_dir}")
 
     manifest = load_pack_manifest(source_dir)  # validate BEFORE copying anything
     if manifest.name != name:
@@ -86,9 +89,21 @@ def install_pack(name: str, config: dict | None = None, root: Path | None = None
     if installed_dir.resolve() not in dest_dir.resolve().parents and dest_dir.resolve() != installed_dir.resolve():
         raise PackInstallError(f"resolved install path {dest_dir} escapes {installed_dir}")
 
+    # Copy into a sibling temp dir first, then swap it into place — a copy
+    # failure (partway through a large pack, a permissions error, disk
+    # full) leaves any existing install untouched instead of deleting it
+    # before the replacement is known to be complete.
+    temp_dir = Path(tempfile.mkdtemp(dir=installed_dir, prefix=f".{name}.tmp-"))
+    temp_dir.rmdir()  # mkdtemp creates it; copytree requires the dest not to exist yet
+    try:
+        shutil.copytree(source_dir, temp_dir)
+    except Exception:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
+
     if dest_dir.exists():
         shutil.rmtree(dest_dir)
-    shutil.copytree(source_dir, dest_dir)
+    temp_dir.rename(dest_dir)
     return manifest
 
 

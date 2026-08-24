@@ -49,7 +49,10 @@ def _check_config_resolve() -> CheckResult:
 
 
 def _check_packs_integrity(config: dict | None = None) -> CheckResult:
-    from core.packs.registry import list_installed_packs  # local import: avoids a diagnostics->packs->config import cycle at module load time
+    # Local import: keeps core/packs/ import cost (pydantic, yaml) out of
+    # this module's load path for callers that never run doctor's packs
+    # check — not needed to avoid a cycle, there isn't one.
+    from core.packs.registry import list_installed_packs
 
     config = config if config is not None else resolve_config_auto()
     results = list_installed_packs(config=config)

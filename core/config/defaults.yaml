@@ -12,6 +12,7 @@ gateway:
   port: 8000
 paths:
   packs_installed: packs/installed
+  packs_registry: packs/registry
   model_catalog: catalog/model_catalog.yaml
 verify:
   test_command: ""

@@ -88,7 +88,7 @@ dependencies: []          # other pack names this one requires
 ### Install/discovery mechanism
 
 1. `promptwise pack install <name>[@version]` copies (or symlinks in dev) `packs/registry/<name>/` into `packs/installed/<name>/`.
-2. Core's pack loader validates `pack.yaml` against the manifest schema, checks `requires_core` semver range, resolves `dependencies`, and registers the pack's capabilities with `check_policy` **before** any pack content is exposed to an agent.
+2. Core's pack loader validates `pack.yaml` against the manifest schema, checks `requires_core` semver range, resolves `dependencies`, and registers the pack's capabilities with `check_policy` **before** any pack content is exposed to an agent. *(Status: schema/semver validation shipped in the pack-loader-foundation slice; dependency resolution and `check_policy` capability registration are not yet built — see `docs/BACKLOG.md`, both are gated on Phase 3.)*
 3. Packs are hot-discoverable — the loader watches `packs/installed/` and re-registers on change; no core restart required for content-only packs (persona/verify-rule/DAG changes). Adding a new *capability* to an already-installed pack requires an explicit re-approval (policy re-grant), never silent escalation.
 4. `promptwise pack list / pack remove <name>` — removal deletes from `packs/installed/` and deregisters; core and other packs keep working.
 

@@ -55,6 +55,11 @@ def test_permissions_rationale_must_not_be_blank():
         PackManifest(**_valid_kwargs(permissions_rationale="   "))
 
 
+def test_version_must_be_valid_semver():
+    with pytest.raises(ValidationError):
+        PackManifest(**_valid_kwargs(version="not-a-version"))
+
+
 def test_capabilities_and_dependencies_default_empty():
     kwargs = _valid_kwargs()
     del kwargs["capabilities"]

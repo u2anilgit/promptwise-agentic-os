@@ -65,8 +65,11 @@ def test_malformed_yaml_syntax_raises_pack_validation_error(tmp_path):
 
 
 def test_defaults_to_running_core_version(tmp_path, monkeypatch):
+    # Patched to a value distinct from the real package version (0.1.0) so
+    # this test would fail if load_pack_manifest stopped reading
+    # core.__version__ and fell back to a hardcoded default instead.
     import core
-    monkeypatch.setattr(core, "__version__", "0.1.0")
-    pack_dir = _write_manifest(tmp_path, VALID_YAML)
+    monkeypatch.setattr(core, "__version__", "0.1.5")
+    pack_dir = _write_manifest(tmp_path, VALID_YAML)  # requires_core ">=0.1.0,<0.2.0" covers 0.1.5
     manifest = load_pack_manifest(pack_dir)  # no core_version passed
     assert manifest.name == "repo-intelligence"

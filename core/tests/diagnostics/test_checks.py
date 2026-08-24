@@ -112,15 +112,6 @@ def test_packs_integrity_resolves_relative_configured_path_against_root(tmp_path
     assert "1 pack" in result.message
 
 
-def test_packs_integrity_passes_with_zero_packs_direct(tmp_path):
-    from core.diagnostics.checks import _check_packs_integrity
-
-    config = {"paths": {"packs_installed": str(tmp_path / "packs" / "installed")}}
-    result = _check_packs_integrity(config)
-    assert result.status == "PASS"
-    assert "0 packs" in result.message
-
-
 def test_packs_integrity_zero_packs_message_includes_resolved_path(tmp_path):
     from core.diagnostics.checks import _check_packs_integrity
 
