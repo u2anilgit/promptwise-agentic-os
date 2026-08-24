@@ -15,6 +15,10 @@ Final whole-branch review findings not fixed before merge (see `docs/superpowers
 - [ ] **`check_policy` capability registration not built** — an installed pack's declared `capabilities` (e.g. `shell:run:ruff`) aren't automatically registered as policy grants; check_policy has no actor/pack-scoped concept yet, only a flat action-string match. Needs a real design pass (how does a pack-declared capability become a policy rule scoped to *that pack's* actions, without silently widening what every other actor can do?) before implementation — don't build ad hoc.
 - [ ] **Dependency resolution is presence-only, not version-constrained or auto-installing** — `install_pack` checks a dependency exists in `packs/installed/`, not that its installed version satisfies any range, and never installs a missing dependency automatically (the operator must `pack install` it first, in order). Fine for the current small pack count; revisit if/when Phase 8's pack catalog grows enough that manual dependency ordering becomes annoying.
 
+### Architecture-advisor pack (idea, not started)
+
+Research done 2026-08-24: `docs/research/architecture-patterns-cloud-reference.md` — software architecture pattern decision table (layered, microservices, event-driven, CQRS, DDD, hexagonal, SOA, etc.), cloud service/deployment model reference, AWS/Azure/GCP 2026 comparison, and a 4-question recommendation heuristic. Proposed shape: `packs/registry/architecture-advisor/` (kind: `intelligence`) that takes project context and returns a ranked pattern + cloud recommendation with rationale. Depends on nothing blocking implementation directly, but best sequenced after Phase 5 (spec engine) if it wants structured project-context intake rather than ad hoc prompting.
+
 ### Repo-intelligence / methodology packs (blocked, tracked here so it isn't lost)
 
 From `docs/superpowers/specs/2026-08-24-repo-intelligence-methodology-packs-design.md` — content blocked on Phases 3 (`check_policy`/`record_audit`), 4 (code index), 5 (spec engine/`orchestrate_tasks`), none of which exist in code yet.
