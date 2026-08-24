@@ -6,7 +6,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from core.config.resolve import resolve_config_auto
+from core.config.resolve import resolve_config_auto, resolve_path
 from core.diagnostics.hardware import detect_hardware
 from core.diagnostics.models import CheckResult
 
@@ -62,6 +62,13 @@ def _check_packs_integrity(config: dict | None = None) -> CheckResult:
             message=f"{len(invalid)} of {len(results)} installed packs failed validation — {details}",
         )
     count = len(results)
+    if count == 0:
+        installed_dir = resolve_path(config, "paths.packs_installed", "packs/installed")
+        return CheckResult(
+            name="packs.integrity",
+            status="PASS",
+            message=f"0 packs installed ({installed_dir} — normal before first `pack install`)",
+        )
     noun = "pack" if count == 1 else "packs"
     return CheckResult(name="packs.integrity", status="PASS", message=f"{count} {noun} installed, all valid")
 

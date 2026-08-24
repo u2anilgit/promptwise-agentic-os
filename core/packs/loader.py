@@ -28,8 +28,11 @@ def load_pack_manifest(pack_dir: Path, core_version: str | None = None) -> PackM
     if not manifest_path.exists():
         raise PackValidationError(f"{pack_dir} has no pack.yaml")
 
-    with manifest_path.open("r", encoding="utf-8") as f:
-        raw = yaml.safe_load(f) or {}
+    try:
+        with manifest_path.open("r", encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
+    except (yaml.YAMLError, UnicodeDecodeError, OSError) as exc:
+        raise PackValidationError(f"{manifest_path} could not be read/parsed: {exc}") from exc
 
     try:
         manifest = PackManifest.model_validate(raw)

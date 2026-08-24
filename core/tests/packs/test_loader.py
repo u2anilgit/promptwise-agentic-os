@@ -54,6 +54,16 @@ def test_invalid_requires_core_clause_raises(tmp_path):
         load_pack_manifest(pack_dir, core_version="0.1.0")
 
 
+def test_malformed_yaml_syntax_raises_pack_validation_error(tmp_path):
+    # Genuinely malformed YAML syntax (unbalanced flow mapping) — this must
+    # raise yaml.YAMLError from yaml.safe_load, not just fail schema
+    # validation on a parseable-but-invalid document.
+    bad_yaml = "name: broken\ncapabilities: [fs:read\n"
+    pack_dir = _write_manifest(tmp_path, bad_yaml, dirname="malformed-yaml-pack")
+    with pytest.raises(PackValidationError, match="could not be read/parsed"):
+        load_pack_manifest(pack_dir, core_version="0.1.0")
+
+
 def test_defaults_to_running_core_version(tmp_path, monkeypatch):
     import core
     monkeypatch.setattr(core, "__version__", "0.1.0")

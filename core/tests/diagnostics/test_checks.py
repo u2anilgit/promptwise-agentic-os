@@ -121,6 +121,16 @@ def test_packs_integrity_passes_with_zero_packs_direct(tmp_path):
     assert "0 packs" in result.message
 
 
+def test_packs_integrity_zero_packs_message_includes_resolved_path(tmp_path):
+    from core.diagnostics.checks import _check_packs_integrity
+
+    installed_dir = tmp_path / "packs" / "installed"
+    config = {"paths": {"packs_installed": str(installed_dir)}}
+    result = _check_packs_integrity(config)
+    assert result.status == "PASS"
+    assert str(installed_dir) in result.message
+
+
 def test_packs_integrity_passes_with_one_valid_pack(tmp_path):
     from core.diagnostics.checks import _check_packs_integrity
 

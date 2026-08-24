@@ -84,6 +84,20 @@ def test_pack_install_unknown_pack_exits_nonzero(tmp_path, monkeypatch):
     assert "install failed" in result.stdout
 
 
+def test_pack_install_malformed_yaml_exits_nonzero_without_traceback(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    registry_pack = tmp_path / "packs" / "registry" / "broken-pack"
+    registry_pack.mkdir(parents=True)
+    (registry_pack / "pack.yaml").write_text(
+        "name: broken\ncapabilities: [fs:read\n", encoding="utf-8"
+    )
+
+    result = runner.invoke(app, ["pack", "install", "broken-pack"])
+    assert result.exit_code == 1
+    assert "install failed" in result.stdout
+    assert "Traceback" not in result.stdout
+
+
 def test_pack_remove_unknown_pack_exits_nonzero(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["pack", "remove", "never-installed"])
