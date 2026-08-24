@@ -6,6 +6,69 @@ Each entry: what, why it matters, where it came from, status.
 
 ## Open
 
+### From `memory-fact-layer` plan (merged `3f56319`, 2026-08-24)
+
+Final whole-branch review found 3 Major findings, all fixed before merge (`1f639e5`): unreachable
+Qdrant crashed both `record_memory`/`query_memory` (unguarded `ensure_collection`, plus a leaked
+SQLite connection on that path); `upsert_fact`/`vector_search` failures crashed instead of
+degrading to BM25-only as the module's own docstring claimed; `embed_text`'s except clause missed
+`json.JSONDecodeError` and didn't guard a non-dict response body. See
+`docs/superpowers/plans/2026-08-24-memory-fact-layer.md` and
+`docs/superpowers/specs/2026-08-24-memory-fact-layer-design.md`. These are the rest, deliberately
+deferred:
+
+- [ ] **`scope="session"` is not filtered by `session_id` in `query_memory`** (Major, deferred not
+  fixed) — `record_memory` accepts and persists `session_id`, but `query_memory` has no
+  `session_id` parameter, and neither `search_fts` nor `vectors.search`/`upsert_fact`'s Qdrant
+  payload carry it. A session-scoped query today returns facts from every session, not just the
+  caller's. Both verb docstrings in `core/memory/memory.py` now disclose this explicitly. Fix:
+  add `session_id: str | None = None` to `query_memory`, thread it into `search_fts` as a new
+  optional predicate, add it to `vectors.search`'s filter and `upsert_fact`'s payload. Sub-project
+  3 (ingestion daemon) is the first planned real consumer of session scope — do this before or
+  alongside that work, not speculatively now.
+- [ ] **Duplicated row→`Fact` hydration** — the same 8-column positional row shape is unpacked
+  into a `Fact` in both `core/memory/store.py` (`search_fts`) and `core/memory/memory.py`
+  (`query_memory`'s vector-only-fallback SELECT). A `_SCHEMA` column reorder would silently
+  corrupt one of them without a compiler/type error. Fix: add `_row_to_fact(row) -> Fact` and a
+  `get_fact(conn, fact_id) -> Fact | None` to `store.py`; have `memory.py` call `get_fact` instead
+  of hand-rolling the SELECT.
+- [ ] **`query_memory`'s SQLite fallback SELECT has no scope/root predicate** — `SELECT ... FROM
+  facts WHERE id = ?` trusts the id list from vector search entirely; safe today only because
+  `vectors.search` already filters by scope+root, but it's the one place a fact could enter the
+  result set without its own scope check. Defense in depth: add `AND scope = ?` (and the root
+  predicate when set) to the fallback query.
+- [ ] **`query_memory` isn't audited on the normal (no-PII-exclusion) path** — `record_audit`
+  only fires inside `if excluded_count:`, so an ordinary query leaves no audit trail at all,
+  against goal 4's "every fs/shell/DB/cloud action is governed and audited." Plan-inherited (the
+  plan's own sample code did this), not implementer drift. Fix: call `record_audit`
+  unconditionally once per `query_memory` call, with `detail={"result_count": ..., "pii_excluded_count": ...}`.
+- [ ] **PII flag is whole-input, not per-fact** — `contains_pii(text)` runs once on the raw input
+  and stamps every fact extracted from it, so one email address in a long transcript flags every
+  sibling fact. Conservative (over-flags, never under-flags), not a leak, but degrades
+  `allow_pii=False` recall over time. Fix (later): flag per extracted fact instead, or document
+  the whole-input choice as intentional.
+- [ ] **Session-scope config resolution falls back to process cwd** — `record_memory`/
+  `query_memory` call `resolve_config_auto(root=Path(root) if root else None)`; for legitimate
+  session-scope calls `root` is `None`, so config/db-path resolution falls back to process cwd —
+  the same bug *class* Phase 2 already fixed once (MCP caller cwd ≠ target project cwd). Only
+  reachable when a caller omits `config`, which no current test does. Decide and document where
+  session-scoped memory should actually live (a user-level path, not cwd) before a real caller
+  hits this.
+- [ ] **`route_request` call in `extract_facts` sits outside its own `try` block** — latent, not
+  observed: `route_request` can raise `ValueError("no eligible tiers in catalog...")`
+  (`core/routing/router.py:54`), and the call is one line above `extract_facts`'s `try:`, so that
+  specific exception would escape the "never raises" contract. Four attempted degenerate configs
+  (empty tier order, cloud-only under local_only, missing catalog, nonexistent tier) all had the
+  router's own fallback absorb them instead — reviewer could not trigger it live. Fix: move the
+  `route_request` call inside the existing `try` (the `except Exception` already returns the
+  correct unclassified-fact fallback).
+- [ ] Post-plan follow-ups named in the plan itself: MCP tool exposure for `record_memory`/
+  `query_memory` (mirrors `verify_output`'s and the code index's eventual MCP wrapper);
+  `kind="doc_chunk"` extension for general RAG (deliberately out of this sub-project's scope);
+  `services.ollama`/`services.qdrant` real health checks in `core/diagnostics/checks.py`
+  (currently `_not_yet_implemented` stubs) — `promptwise doctor` should report whether this
+  sub-project's runtime dependencies are actually reachable.
+
 ### From `pack-loader-foundation` plan (merged `aa9cf4a`, 2026-08-24)
 
 Final whole-branch review findings not fixed before merge (see `docs/superpowers/plans/2026-08-24-pack-loader-foundation.md` and the design spec it implements, `docs/superpowers/specs/2026-08-24-repo-intelligence-methodology-packs-design.md`).
@@ -83,9 +146,19 @@ From `docs/superpowers/specs/2026-08-24-repo-intelligence-methodology-packs-desi
   then finally whole-branch-reviewed (1 more major + 8 minor found; the major — file-level I/O
   errors crashing the whole query — and a related minor fixed `12d3288`, rest logged above).
   Merged to master `deab912` 2026-08-24, full suite green (226 passed, 4 skipped).
-- [ ] **Phase 4 sub-projects 2 & 3 (memory/fact layer, ingestion daemon)** — hybrid BM25+vector
-  retrieval + PII exclusion (sub-project 2), the daemon that keeps the code index and memory
-  layer fresh without manual reindex calls (sub-project 3). Not started — each needs its own
+- [x] **Phase 4 sub-project 2 of 3 (memory/fact layer)** — `core/memory/`: `Fact` model,
+  SQLite+FTS5 fact store (`store.py`), PII detector extending `redact.py` (`contains_pii`),
+  Ollama embeddings (`embed.py`), local-model fact extraction via `route_request` (`extract.py`),
+  Qdrant vector wrapper (`vectors.py`), Reciprocal Rank Fusion (`rank.py`), and the public
+  `record_memory`/`query_memory` verbs (`memory.py`) tying hybrid BM25+vector retrieval together.
+  8 tasks, individually task-reviewed (Task 2 had a real FTS5-keyword-crash bug, 1 fix round;
+  Task 8 caught+fixed a plan defect — `AuditRecord.result` doesn't accept "success"), then finally
+  whole-branch-reviewed (3 more major cross-task findings + 9 minor; the majors — unguarded Qdrant
+  calls crashing both verbs, `embed_text` missing `JSONDecodeError` — fixed in one wave `1f639e5`,
+  rest logged above). Merged to master `3f56319` 2026-08-24, full suite green (266 passed,
+  4 skipped).
+- [ ] **Phase 4 sub-project 3 of 3 (ingestion daemon)** — the daemon that keeps the code index and
+  memory layer fresh without manual reindex/record_memory calls. Not started — needs its own
   brainstorm per `docs/superpowers/specs/2026-08-24-code-index-design.md`'s Decision 2 (deliberately
   shares no code with the code index).
 - [ ] **Phase 5 (Spec-driven workflow engine)** — `specify/plan/tasks/implement/verify`. Not started.
