@@ -6,6 +6,39 @@ Each entry: what, why it matters, where it came from, status.
 
 ## Open
 
+### From `orchestrate-tasks` plan (merged `9fe587d`, 2026-08-24)
+
+Final whole-branch review found 0 blocker, 0 major, 3 minor — merged as-is per the reviewer's
+explicit recommendation. See `docs/superpowers/plans/2026-08-24-orchestrate-tasks.md` and
+`docs/superpowers/specs/2026-08-24-orchestrate-tasks-design.md`.
+
+- [ ] **Duplicate node ids report as "dag contains a cycle" rather than a distinct error** —
+  `core/orchestrate/graph.py`'s `topological_order`: two `DagNode`s sharing an `id` aren't
+  explicitly checked; Kahn's algorithm degrades to reporting them as if the DAG were cyclic
+  (fails closed either way — no node runs — so this is a diagnostics-quality issue, not a
+  correctness one). Fix: add an explicit duplicate-id check ahead of the cycle detection, with a
+  clearer error message.
+- [ ] **`route_request` sits outside `orchestrate_tasks`'s per-node `try`** —
+  `core/orchestrate/runner.py`: if `route_request` itself raises (`ValueError("no eligible tiers
+  in catalog...")`, `core/routing/router.py:54` — reachable with a cloud-only catalog and a
+  `privacy_sensitive=True` node mid-DAG), that exception propagates out of `orchestrate_tasks`
+  entirely, aborting the whole call after earlier nodes' side effects have already run. This
+  technically violates the plan's Global Constraint that only a structurally invalid DAG (cycle/
+  dangling ref) should abort the whole call — everything else is supposed to degrade per-node.
+  Narrow trigger condition under the default catalog, which is why the final review classified it
+  minor rather than major, but real. Fix: move the `route_request` call inside the per-node `try`,
+  or catch its `ValueError` specifically and degrade that one node to
+  `routing_decision=None`/`status="error"` rather than letting it abort the DAG.
+- [ ] **`route_request` re-resolves hardware+catalog once per node, no caching across the loop**
+  — a performance nit (`detect_hardware()` + `load_catalog()`'s YAML read happen on every node),
+  not a correctness defect. Fix: resolve once per `orchestrate_tasks` call and thread through via
+  `route_request`'s existing `hardware`/`catalog` parameters.
+- [ ] Post-plan follow-ups named in the plan/spec themselves: **sub-project 2 — the spec engine**
+  (`specify/plan/tasks/implement/verify`, EARS artifacts) — needs its own brainstorm, will consume
+  `orchestrate_tasks` directly; declarative DAG loading for pack-provided `dags/*.yaml` templates
+  (`docs/ARCHITECTURE.md` §3); a parallel execution strategy if profiling on a real wide DAG ever
+  shows sequential execution is a bottleneck; MCP tool exposure for `orchestrate_tasks`.
+
 ### From `ingestion-sweep` plan (merged `d83c846`, 2026-08-24)
 
 Final whole-branch review was CLEAN — no findings, no fix wave. See
@@ -185,7 +218,19 @@ From `docs/superpowers/specs/2026-08-24-repo-intelligence-methodology-packs-desi
   thread/asyncio/subprocess/watchdog/scheduling code exists anywhere in the module. Merged to
   master `d83c846` 2026-08-24, full suite green (274 passed, 4 skipped).
   **Phase 4 (Memory & code context) is now fully complete — all 3 sub-projects merged.**
-- [ ] **Phase 5 (Spec-driven workflow engine)** — `specify/plan/tasks/implement/verify`. Not started.
+- [x] **Phase 5 sub-project 1 of 2 (`orchestrate_tasks` DAG runner)** — `core/orchestrate/`:
+  `DagNode`/`Dag`/`NodeResult`/`DagResult` models, `topological_order` (Kahn's algorithm, cycle/
+  dangling-ref detection), and the public `orchestrate_tasks` verb — topological execution of
+  caller-supplied node callables with per-node `route_request` tier hints, fail-soft dependent-
+  skip on a node failure, and per-node audit. Deliberately sequential (no threads) and never
+  invokes an LLM/agent itself — pure orchestration bookkeeping over whatever the caller's
+  callables do (design spec Rulings 1-2). 3 tasks, all individually reviewed clean with zero fix
+  rounds, then finally whole-branch-reviewed with 0 blocker/0 major/3 minor — merged as-is per the
+  reviewer's explicit recommendation (minors logged above). Merged to master `9fe587d`
+  2026-08-24, full suite green (292 passed, 4 skipped).
+- [ ] **Phase 5 sub-project 2 of 2 (spec engine)** — `specify/plan/tasks/implement/verify`,
+  EARS-format acceptance-criteria artifacts, wrapping sub-project 1's `orchestrate_tasks`. Not
+  started — needs its own brainstorm now that its dependency exists.
 
 ## Resolved
 
