@@ -52,3 +52,48 @@ def test_parse_file_tolerates_a_syntax_error(tmp_path):
     locations = parse_file(py_file)
     symbols = {loc.symbol for loc in locations}
     assert "foo" in symbols
+
+
+def test_parse_file_extracts_typescript_function_class_method(tmp_path):
+    source = (
+        "function foo(x) { return x; }\n"
+        "\n"
+        "class Bar {\n"
+        "  methodA() { return 1; }\n"
+        "}\n"
+    )
+    ts_file = tmp_path / "sample.ts"
+    ts_file.write_text(source, encoding="utf-8")
+
+    locations = parse_file(ts_file)
+    by_symbol = {loc.symbol: loc for loc in locations}
+
+    assert by_symbol["foo"].kind == "function"
+    assert by_symbol["Bar"].kind == "class"
+    assert by_symbol["methodA"].kind == "method"
+
+
+def test_parse_file_extracts_tsx(tmp_path):
+    source = "function Widget(props) { return null; }\n"
+    tsx_file = tmp_path / "widget.tsx"
+    tsx_file.write_text(source, encoding="utf-8")
+
+    locations = parse_file(tsx_file)
+    assert {loc.symbol for loc in locations} == {"Widget"}
+
+
+def test_parse_file_extracts_javascript(tmp_path):
+    source = (
+        "function foo(x) { return x; }\n"
+        "class Bar {\n"
+        "  methodA() { return 1; }\n"
+        "}\n"
+    )
+    js_file = tmp_path / "sample.js"
+    js_file.write_text(source, encoding="utf-8")
+
+    locations = parse_file(js_file)
+    by_symbol = {loc.symbol: loc for loc in locations}
+    assert by_symbol["foo"].kind == "function"
+    assert by_symbol["Bar"].kind == "class"
+    assert by_symbol["methodA"].kind == "method"
