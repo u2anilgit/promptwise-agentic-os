@@ -83,6 +83,25 @@ def test_install_rejects_unsafe_name_before_touching_disk(tmp_path):
         install_pack("../../etc", config=_config(), root=tmp_path)
 
 
+def test_install_rejects_a_missing_dependency(tmp_path):
+    dep_yaml = VALID_YAML.replace("dependencies: []", "dependencies: [required-pack]")
+    _make_registry_pack(tmp_path, contents=dep_yaml)
+    with pytest.raises(PackInstallError, match="required-pack"):
+        install_pack("sample-pack", config=_config(), root=tmp_path)
+    assert not (tmp_path / "packs" / "installed" / "sample-pack").exists()
+
+
+def test_install_succeeds_when_dependency_already_installed(tmp_path):
+    _make_registry_pack(tmp_path, name="required-pack", contents=VALID_YAML.replace("name: sample-pack", "name: required-pack"))
+    install_pack("required-pack", config=_config(), root=tmp_path)
+
+    dep_yaml = VALID_YAML.replace("dependencies: []", "dependencies: [required-pack]")
+    _make_registry_pack(tmp_path, contents=dep_yaml)
+    manifest = install_pack("sample-pack", config=_config(), root=tmp_path)
+    assert manifest.name == "sample-pack"
+    assert (tmp_path / "packs" / "installed" / "sample-pack").exists()
+
+
 def test_list_installed_returns_valid_and_invalid(tmp_path):
     _make_registry_pack(tmp_path)
     install_pack("sample-pack", config=_config(), root=tmp_path)

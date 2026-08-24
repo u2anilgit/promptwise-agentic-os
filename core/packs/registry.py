@@ -88,6 +88,12 @@ def install_pack(name: str, config: dict | None = None, root: Path | None = None
         raise PackInstallError(f"{name} declares itself as a dependency")
 
     installed_dir = _installed_dir(config, resolved_root)
+    missing_deps = [dep for dep in manifest.dependencies if not (installed_dir / dep).exists()]
+    if missing_deps:
+        raise PackInstallError(
+            f"{name} depends on {', '.join(missing_deps)}, which must be installed first"
+        )
+
     dest_dir = installed_dir / name
     # Defense in depth beyond the slug regex: the resolved dest must stay
     # inside installed_dir even after path resolution.
