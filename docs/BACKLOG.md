@@ -6,6 +6,23 @@ Each entry: what, why it matters, where it came from, status.
 
 ## Open
 
+### From `ingestion-sweep` plan (merged `d83c846`, 2026-08-24)
+
+Final whole-branch review was CLEAN — no findings, no fix wave. See
+`docs/superpowers/plans/2026-08-24-ingestion-sweep.md` and
+`docs/superpowers/specs/2026-08-24-ingestion-daemon-design.md`. The design spec's own deferred
+scope (deliberately out of this sub-project, per its Rulings 1-2):
+
+- [ ] **A reference ops recipe that actually calls `run_ingestion_sweep` on a cadence** — this
+  sub-project ships the verb only; nothing in this repo invokes it yet. Add a documented cron
+  entry / systemd timer / Windows Task Scheduler task / future gateway-hosted scheduler example.
+- [ ] **Automatic session-transcript capture / watched-folder ingestion** — deliberately deferred
+  (design spec Ruling 2) until a policy model exists for "what may be auto-ingested" (per-source
+  policy, rate limiting, consent). `run_ingestion_sweep`'s `session_texts` parameter is ready to
+  receive whatever that future capture mechanism produces; no rework needed on this side.
+- [ ] **MCP tool exposure for `run_ingestion_sweep`**, mirroring the other two Phase 4
+  sub-projects' eventual MCP wrappers.
+
 ### From `memory-fact-layer` plan (merged `3f56319`, 2026-08-24)
 
 Final whole-branch review found 3 Major findings, all fixed before merge (`1f639e5`): unreachable
@@ -157,10 +174,17 @@ From `docs/superpowers/specs/2026-08-24-repo-intelligence-methodology-packs-desi
   calls crashing both verbs, `embed_text` missing `JSONDecodeError` — fixed in one wave `1f639e5`,
   rest logged above). Merged to master `3f56319` 2026-08-24, full suite green (266 passed,
   4 skipped).
-- [ ] **Phase 4 sub-project 3 of 3 (ingestion daemon)** — the daemon that keeps the code index and
-  memory layer fresh without manual reindex/record_memory calls. Not started — needs its own
-  brainstorm per `docs/superpowers/specs/2026-08-24-code-index-design.md`'s Decision 2 (deliberately
-  shares no code with the code index).
+- [x] **Phase 4 sub-project 3 of 3 (ingestion sweep)** — `core/ingestion/`: `IngestionResult`
+  model and the one public verb, `run_ingestion_sweep`, composing the already-merged code index
+  (`query_code_index`) and memory layer (`record_memory`) — refreshes the code index and records
+  caller-supplied session text as facts. Deliberately ships as a single idempotent verb an
+  external scheduler invokes, not a persistent background process/watcher/daemon (design spec
+  Ruling 1 — the lower-risk shape per explicit "safer, full autonomous mode" instruction). 2
+  tasks, both individually reviewed clean with zero fix rounds, then finally whole-branch-reviewed
+  CLEAN (0 findings) — including a grep-verified scope-boundary audit confirming no
+  thread/asyncio/subprocess/watchdog/scheduling code exists anywhere in the module. Merged to
+  master `d83c846` 2026-08-24, full suite green (274 passed, 4 skipped).
+  **Phase 4 (Memory & code context) is now fully complete — all 3 sub-projects merged.**
 - [ ] **Phase 5 (Spec-driven workflow engine)** — `specify/plan/tasks/implement/verify`. Not started.
 
 ## Resolved
