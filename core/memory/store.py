@@ -58,10 +58,12 @@ def _sanitize_fts_query(query: str) -> str:
     # syntax rather than a search term — extract word tokens and OR them,
     # same "treat untrusted input as a handled state" convention as the
     # rest of this repo, not a security fix (parameters are still bound).
+    # Quoting each token makes FTS5 treat it as a literal phrase, preventing
+    # FTS5 keywords (OR, AND, NOT) from being parsed as operators.
     tokens = re.findall(r"\w+", query)
     if not tokens:
         return ""
-    return " OR ".join(tokens)
+    return " OR ".join(f'"{t}"' for t in tokens)
 
 
 def search_fts(

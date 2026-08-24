@@ -55,3 +55,24 @@ def test_search_fts_respects_limit(tmp_path):
     for i in range(5):
         save_fact(conn, Fact(text=f"fact number {i} about testing", category="context", scope="project", root="/repo", created_at=time.time()))
     assert len(search_fts(conn, "testing", scope="project", root="/repo", limit=3)) == 3
+
+
+def test_search_fts_survives_a_query_that_is_a_bare_fts5_keyword(tmp_path):
+    conn = open_store(_config(tmp_path))
+    save_fact(conn, Fact(text="user decided to use OR logic", category="decision", scope="project", root="/repo", created_at=time.time()))
+    # Bare FTS5 keywords like "OR", "AND", "NOT" would crash without proper quoting.
+    # Verify they are treated as literal search terms, not operators.
+    results = search_fts(conn, "OR", scope="project", root="/repo")
+    assert len(results) == 1
+    assert "OR" in results[0].text
+
+    # Also test "AND" and "NOT"
+    save_fact(conn, Fact(text="decision about AND gates", category="decision", scope="project", root="/repo", created_at=time.time()))
+    results = search_fts(conn, "AND", scope="project", root="/repo")
+    assert len(results) == 1
+    assert "AND" in results[0].text
+
+    save_fact(conn, Fact(text="NOT a good approach", category="decision", scope="project", root="/repo", created_at=time.time()))
+    results = search_fts(conn, "NOT", scope="project", root="/repo")
+    assert len(results) == 1
+    assert "NOT" in results[0].text
