@@ -63,3 +63,39 @@ def test_record_audit_result_must_be_one_of_the_allowed_values(tmp_path):
     config = _config(tmp_path)
     with pytest.raises(ValidationError):
         record_audit(config, actor="cli", action="a", target="x", result="not-a-real-result")
+
+
+def test_chain_stays_correct_across_many_records_past_a_single_read_chunk(tmp_path):
+    """Regression: _last_hash used to scan the whole file line-by-line on
+    every record_audit call (O(n) per write, O(n^2) per session). It now
+    seeks backward from EOF in chunks — this exercises a log long enough
+    to force more than one chunk read, proving the chunked seek still
+    finds the true last line, not a truncated one.
+    """
+    config = _config(tmp_path)
+    last = None
+    for i in range(400):  # long enough to exceed one 4096-byte chunk
+        last = record_audit(config, actor="cli", action="a", target=f"file-{i}.txt", result="allow")
+    ok, broken_at = verify_chain(config)
+    assert ok is True
+    assert broken_at is None
+
+    # the next record must chain off the true tip, not a stale/truncated one
+    from pathlib import Path
+
+    from core.audit.log import _last_hash
+
+    assert _last_hash(Path(config["audit"]["log_path"])) == last.hash
+
+
+def test_last_hash_ignores_a_trailing_blank_line(tmp_path):
+    config = _config(tmp_path)
+    record = record_audit(config, actor="cli", action="a", target="x", result="allow")
+    with open(config["audit"]["log_path"], "a", encoding="utf-8") as f:
+        f.write("\n")  # e.g. a trailing newline left by some external tool
+
+    from pathlib import Path
+
+    from core.audit.log import _last_hash
+
+    assert _last_hash(Path(config["audit"]["log_path"])) == record.hash

@@ -24,8 +24,8 @@ From `docs/superpowers/specs/2026-08-24-repo-intelligence-methodology-packs-desi
 
 ### Phase-level (from `docs/ROADMAP.md`)
 
-- [ ] **Phase 2 (Verification Gate)** — `core/verify/` (gate/ledger/runners/security) already has substantial code, but has not been confirmed against `ROADMAP.md`'s acceptance criteria (blocks a deliberately-broken diff, Semgrep/Gitleaks wired in, failure ledger breaks a retry loop after N identical failures, works against a real Claude Code session via MCP). No unbuilt dependency — this is the natural next phase-level work.
-- [ ] **Phase 3 (Governed system control)** — `check_policy`, `record_audit`, JIT grants, audit hash-chain. Not started. Blocks Phase 4/5/8 content.
+- [x] **Phase 2 (Verification Gate)** — confirmed 2026-08-24: all four `core/verify/` acceptance criteria have real, passing tests (`core/tests/verify/`), including a genuine end-to-end MCP `call_tool` test (previously only tool-registration was checked). Found and fixed a real bug along the way: `verify_output` resolved org/project config from the *process* cwd instead of the `cwd` argument — broke any MCP caller whose target project differs from the gateway's own working directory. Fixed in `d3978e6`.
+- [ ] **Phase 3 (Governed system control)** — found already implemented on unmerged branch `worktree-phase3-governed-system-control` (5 commits: check_policy engine, hash-chained audit log, JIT grants, governed fs_write, MCP tool allowlist, support-bundle generator), not previously recorded in session status. Rebased onto master (`phase3-rebase` branch) 2026-08-24, all conflicts resolved (additive only), full suite green (194 passed, 1 skipped). Under code-review before merge — update this line once merged.
 - [ ] **Phase 4 (Memory & code context)** — hybrid BM25+vector retrieval, tree-sitter code index. Not started.
 - [ ] **Phase 5 (Spec-driven workflow engine)** — `specify/plan/tasks/implement/verify`. Not started.
 

@@ -31,14 +31,37 @@ def _record_hash(record_without_hash: dict[str, Any]) -> str:
 
 
 def _last_hash(path: Path) -> str:
+    """The chain's tip hash. Every record_audit call needs this, so it
+    must not degrade to O(file size) as the log grows — a full read-per-
+    write turns a long session's audit trail into an O(n^2) bottleneck.
+    Seeks backward from EOF in growing chunks instead of scanning from
+    the start; verify_chain still reads the whole file (it has to, to
+    check every link) but that's an explicit, occasional operation.
+    """
     if not path.exists():
         return GENESIS_HASH
-    last_line = None
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                last_line = line
-    if last_line is None:
+
+    file_size = path.stat().st_size
+    if file_size == 0:
+        return GENESIS_HASH
+
+    chunk_size = 4096
+    with path.open("rb") as f:
+        read_size = min(chunk_size, file_size)
+        while True:
+            f.seek(-read_size, 2)
+            data = f.read(read_size)
+            # rstrip \r too: defensive against a log written on a platform
+            # (or an older version of this file) that emitted CRLF line
+            # endings — the trailing \r must not get left dangling and
+            # mistaken for content on the last line.
+            stripped = data.rstrip(b"\r\n")
+            if b"\n" in stripped or read_size >= file_size:
+                break
+            read_size = min(read_size * 2, file_size)
+
+    last_line = stripped.rsplit(b"\n", 1)[-1].rstrip(b"\r")
+    if not last_line.strip():
         return GENESIS_HASH
     return json.loads(last_line)["hash"]
 
@@ -68,7 +91,10 @@ def record_audit(
     record_hash = _record_hash(body)
     record = AuditRecord(**body, hash=record_hash)
 
-    with path.open("a", encoding="utf-8") as f:
+    # newline="" pins LF-only line endings regardless of platform — JSONL
+    # convention, and required for _last_hash's binary tail-seek below to
+    # find line boundaries without also having to strip CRLF.
+    with path.open("a", encoding="utf-8", newline="") as f:
         f.write(record.model_dump_json() + "\n")
 
     return record

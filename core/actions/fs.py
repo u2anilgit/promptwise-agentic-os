@@ -39,7 +39,10 @@ def _save_undo_buffer(config: dict[str, Any], buffer: list[UndoEntry]) -> None:
     path = _undo_buffer_path(config)
     path.parent.mkdir(parents=True, exist_ok=True)
     max_size = config.get("actions", {}).get("undo_buffer_max", 50)
-    trimmed = buffer[-max_size:]
+    # buffer[-max_size:] with max_size == 0 slices as [0:] (the whole
+    # list) since Python has no distinct "negative zero" — trim to empty
+    # explicitly instead of relying on the negative-index shortcut.
+    trimmed = buffer[-max_size:] if max_size > 0 else []
     tmp_path = path.with_suffix(".json.tmp")
     with tmp_path.open("w", encoding="utf-8") as f:
         json.dump([entry.model_dump() for entry in trimmed], f, indent=2)
@@ -48,7 +51,11 @@ def _save_undo_buffer(config: dict[str, Any], buffer: list[UndoEntry]) -> None:
 
 def fs_write(config: dict[str, Any], path: Path, content: str) -> FsWriteResult:
     path = Path(path)
-    scope = f"fs.write.{path.name}"
+    # The full path, not just the filename — a policy must be able to
+    # distinguish workspace/hello.txt from secrets/hello.txt. as_posix()
+    # keeps rule authoring portable across OSes (no backslash-escaping
+    # needed in policy YAML).
+    scope = f"fs.write.{path.as_posix()}"
     decision = check_policy(scope, config=config)
 
     if not decision.allowed:
