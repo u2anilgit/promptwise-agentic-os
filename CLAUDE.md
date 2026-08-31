@@ -10,6 +10,7 @@ One sentence: *plug in any agent and any model, get routing that cuts cost 60%+,
 
 **Full vision & research (read before any architectural decision):**
 - `docs/research/aug2026-findings.md` — the Aug-2026 problem landscape, problem→solution map, phase plan, Intelligence Packs addendum (Part 7). This is the primary spec.
+- `docs/research/2026-08-31-findings-refresh.md` — delta since the above: 2026 agentic-pattern/PDLC/SDD research, competitive landscape refresh, repo-status audit, direct input for Phase 5 sub-project 2 (spec engine).
 - `docs/research/v3-implementation-plan.md` — original v3 plan (hardware profiler, model manager, memory layer design detail). Superseded in sequencing by the findings doc, still authoritative for subsystem *design detail* not repeated there.
 - `docs/VISION.md` — condensed, always-current restatement of the above two (start here if short on tokens).
 - `docs/ARCHITECTURE.md` — core engine + skill-pack system design (the CMS pattern), config layering, plugin contract.

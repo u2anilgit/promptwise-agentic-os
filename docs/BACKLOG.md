@@ -6,6 +6,28 @@ Each entry: what, why it matters, where it came from, status.
 
 ## Open
 
+### From research refresh (`docs/research/2026-08-31-findings-refresh.md`, 2026-08-31)
+
+Market/pattern research + repo status audit ahead of Phase 5 sub-project 2 (spec engine).
+Not yet brainstormed/planned — flagging here so it isn't lost.
+
+- [ ] **No SQLAlchemy/Alembic code exists anywhere in `core/`** despite being locked tech
+  stack (root `CLAUDE.md:31`) — will block the spec engine's persistence layer if not
+  planned before Phase 5 sub-project 2 starts.
+- [ ] **`orchestrate_tasks`'s `route_request` call sits outside its per-node `try`** (can
+  abort the whole DAG on one bad call, `core/routing/router.py:54`) — fix before/alongside
+  the spec engine, which wraps `orchestrate_tasks` directly.
+- [ ] **Audit-chain-integrated memory decisions** — tie `core/memory/` recall/promotion
+  into `core/audit/` so "why did the agent remember this" is itself an audited decision.
+  No researched competitor does this; real differentiation, small scope, needs its own
+  brainstorm.
+- [ ] **Confirm in-process MCP server targets the 2026-07-28 MCP spec revision** (stateless
+  core, Multi Round-Trip Requests replacing server-initiated streaming) before Phase 6
+  dashboard's WebSocket/live-feed design locks in assumptions the new spec removes.
+- [ ] **`core/actions/` is undocumented** — exists on disk, not in `core/CLAUDE.md`'s
+  target layout diagram. Check what it contains before spec-engine work starts; may
+  already own relevant plumbing.
+
 ### From `orchestrate-tasks` plan (merged `9fe587d`, 2026-08-24)
 
 Final whole-branch review found 0 blocker, 0 major, 3 minor — merged as-is per the reviewer's
