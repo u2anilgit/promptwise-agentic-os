@@ -254,6 +254,38 @@ From `docs/superpowers/specs/2026-08-24-repo-intelligence-methodology-packs-desi
   EARS-format acceptance-criteria artifacts, wrapping sub-project 1's `orchestrate_tasks`. Not
   started — needs its own brainstorm now that its dependency exists.
 
+### From full-codebase audit, 2026-09-08
+
+Deep pass across `docs/ROADMAP.md`, `docs/BACKLOG.md` (prior entries), and the actual tree
+(`core/`, `gateway/`, `dashboard/`, test collection) to confirm implemented-vs-missing state and
+re-surface priority. Confirmed: 296 tests collected (292 pass, 4 skip — gitleaks binary absent,
+symlink tests need a symlink-capable machine), matching `CLAUDE.md`'s status line. No new bugs
+found beyond what was already logged above; this batch is scope/priority findings, not defects.
+
+- [ ] **`dashboard/` has zero code** — only `dashboard/CLAUDE.md` exists, confirming Phase 6 has
+  not started. First user-visible surface of the whole project; still fully blocked on Phase 5.
+- [ ] **`core/actions/` remains undocumented** in `core/CLAUDE.md`'s target layout diagram —
+  contains `fs.py`/`models.py` (governed `fs_write` lives here per the Phase 3 entry above) but
+  was never added to the doc. Audit and document its actual contents/ownership before spec-engine
+  work builds anything adjacent to it (carried forward from the research-refresh entry above,
+  re-confirmed still open).
+- [ ] **No SQLAlchemy/Alembic code exists anywhere in `core/`** despite being locked stack
+  (root `CLAUDE.md:31`) — re-confirmed still true by directory scan. This is the single highest-
+  risk gap for Phase 5 sub-project 2: the spec engine needs a persistence layer and no decision
+  or scaffold exists yet. Decide the schema/migration approach *before* sub-project 2 starts, not
+  mid-implementation.
+- [ ] **MCP tool exposure gap** — only `verify_output` and the code-index verb are wired into the
+  MCP server (`gateway/mcp_server.py`); `record_memory`, `query_memory`, `run_ingestion_sweep`,
+  and `orchestrate_tasks` are all callable as core verbs but not yet exposed as MCP tools, despite
+  each sub-project's own plan naming this as a named follow-up. Batch these into one MCP-wiring
+  pass rather than one-off per verb — same registration/allowlist pattern each time.
+- [ ] **Priority re-statement for planning purposes** (no code change, ordering only): (1) fix the
+  two logged `route_request`-outside-`try` bugs (`orchestrate_tasks` + `extract_facts`) and the
+  `query_memory` session-scope leak — cheap, and the spec engine inherits both classes of bug by
+  wrapping `orchestrate_tasks` directly; (2) settle the SQLAlchemy/Alembic persistence decision
+  above; (3) Phase 5 sub-project 2 (spec engine) itself; (4) Phase 6 dashboard; (5) Phase 8 pack
+  content, now that Phases 4-5's dependencies are solid.
+
 ## Resolved
 
 - [x] Pack-loader foundation itself (schema/loader/registry/CLI/doctor wiring, `intelligence` pack kind) — `docs/superpowers/plans/2026-08-24-pack-loader-foundation.md`, merged `aa9cf4a` 2026-08-24.
