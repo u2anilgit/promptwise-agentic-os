@@ -21,10 +21,14 @@ class AcceptanceCheck(BaseModel):
     requirement_id: str
     command: str
     files: list[str] = []
+    # "fail": must fail now, before the work exists (red before green). "pass": an explicit
+    # regression guard that must already pass.
+    expect_baseline: Literal["fail", "pass"] = "fail"
 
 
 class FrozenCheck(AcceptanceCheck):
     file_hashes: dict[str, str] = {}
+    baseline: Literal["failed", "passed", "unverified"] = "unverified"
 
 
 class TaskNode(BaseModel):

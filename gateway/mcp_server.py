@@ -234,7 +234,7 @@ def tasks_feature(spec_id: str, tasks: list[dict], checks: list[dict], root: str
     Args:
         spec_id: Id returned by specify_feature.
         tasks: Task dicts: {"id", "requirement_ids", optional "depends_on", "expected_symbols", "task_type"}.
-        checks: Check dicts: {"requirement_id", "command", "files": [paths]}. The command is policy-gated (shell:run:<program>).
+        checks: Check dicts: {"requirement_id", "command", "files": [paths], optional "expect_baseline": "fail"|"pass"}. The command is policy-gated (shell:run:<program>) and is run once now: it must FAIL before the work exists (red before green) unless you declare a regression guard with expect_baseline "pass".
         root: Project directory; defaults to the server's root.
     """
     return _run("tasks_feature", {"root": root}, lambda c: _spec.tasks_feature(
@@ -293,7 +293,7 @@ def converge_feature(spec_id: str, root: str = "") -> dict:
 
 
 @mcp_app.tool()
-def amend_check(spec_id: str, requirement_id: str, command: str, files: list[str], reason: str, root: str = "") -> dict:
+def amend_check(spec_id: str, requirement_id: str, command: str, files: list[str], reason: str, expect_baseline: str = "fail", root: str = "") -> dict:
     """Deliberately replace a frozen acceptance check (audited with old and
     new hashes and your reason). Tasks that relied on the old check are
     reopened. Use only when the requirement genuinely changed.
@@ -304,10 +304,11 @@ def amend_check(spec_id: str, requirement_id: str, command: str, files: list[str
         command: The new check command (policy-gated).
         files: Files the new check depends on.
         reason: Why the check is changing (required).
+        expect_baseline: "fail" (default: the new check must fail now) or "pass" (an explicit regression guard).
         root: Project directory; defaults to the server's root.
     """
     return _run("amend_check", {"root": root}, lambda c: _spec.amend_check(
-        spec_id, requirement_id, AcceptanceCheck(requirement_id=requirement_id, command=command, files=files),
+        spec_id, requirement_id, AcceptanceCheck(requirement_id=requirement_id, command=command, files=files, expect_baseline=expect_baseline),  # type: ignore[arg-type]
         reason=reason, config=c.config, root=c.root,
     ).model_dump(), detail={"spec_id": spec_id, "requirement_id": requirement_id})
 

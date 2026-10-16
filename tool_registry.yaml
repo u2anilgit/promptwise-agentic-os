@@ -39,7 +39,7 @@ tools:
   tasks_feature:
     version: 0.1.0
     enabled: true
-    description_sha256: c5e3e59d645da3be67bd1f3690a190c154917e3546f0053076e2899b594c8f4b
+    description_sha256: 05f72fec11399f9aee858a4e7971d0c80552e8b791cf12070d0e6026b125b0b4
   complete_task:
     version: 0.1.0
     enabled: true
@@ -55,4 +55,4 @@ tools:
   amend_check:
     version: 0.1.0
     enabled: true
-    description_sha256: 2593b801e7bad27b29c49c5a91dbb36a3f8b58fef9a312ccf1cad19368cd4294
+    description_sha256: bafe9e3d2355308a02c325f1077f94af3ee3b0aec0678c4e918a919980a1060f

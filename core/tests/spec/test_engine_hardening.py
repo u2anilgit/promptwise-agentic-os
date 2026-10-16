@@ -50,7 +50,7 @@ def test_blank_check_command_is_rejected_at_freeze(project):
 def test_blank_command_is_rejected_by_amend_check(project):
     tmp, config = project
     spec_id = _tasked(project)
-    bad = AcceptanceCheck(requirement_id="R1", command="", files=["check_login.py"])
+    bad = AcceptanceCheck(requirement_id="R1", command="", files=["check_login.py"], expect_baseline="pass")
     with pytest.raises(ValueError, match="empty command"):
         amend_check(spec_id, "R1", bad, reason="x", config=config, root=tmp)
 
@@ -73,7 +73,7 @@ def test_amend_check_resets_done_tasks_and_the_verified_stage(project):
     assert verify_feature(spec_id, config=config, root=tmp).verified
 
     (tmp / "check_login.py").write_text("import sys\nsys.exit(1)\n", encoding="utf-8")
-    amend_check(spec_id, "R1", AcceptanceCheck(requirement_id="R1", command="python check_login.py", files=["check_login.py"]),
+    amend_check(spec_id, "R1", AcceptanceCheck(requirement_id="R1", command="python check_login.py", files=["check_login.py"], expect_baseline="fail"),
                 reason="tightened", config=config, root=tmp)
 
     with session_scope(config, tmp) as s:
@@ -156,7 +156,7 @@ def test_amend_check_rejects_files_outside_the_project_root(project):
     spec_id = _tasked(project)
     outside = tmp.parent / f"{tmp.name}-outside2.py"
     outside.write_text("print('x')\n", encoding="utf-8")
-    bad = AcceptanceCheck(requirement_id="R1", command=f"python ../{outside.name}", files=[f"../{outside.name}"])
+    bad = AcceptanceCheck(requirement_id="R1", command=f"python ../{outside.name}", files=[f"../{outside.name}"], expect_baseline="pass")
     with pytest.raises(ValueError, match="outside the project root"):
         amend_check(spec_id, "R1", bad, reason="x", config=config, root=tmp)
 

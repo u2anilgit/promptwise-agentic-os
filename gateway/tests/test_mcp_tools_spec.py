@@ -8,8 +8,8 @@ TASKS = [
     {"id": "t2", "requirement_ids": ["R2"], "depends_on": ["t1"]},
 ]
 CHECKS = [
-    {"requirement_id": "R1", "command": "python check_login.py", "files": ["check_login.py"]},
-    {"requirement_id": "R2", "command": "python check_logout.py", "files": ["check_logout.py"]},
+    {"requirement_id": "R1", "command": "python check_login.py", "files": ["check_login.py"], "expect_baseline": "pass"},
+    {"requirement_id": "R2", "command": "python check_logout.py", "files": ["check_logout.py"], "expect_baseline": "pass"},
 ]
 
 
@@ -92,7 +92,7 @@ async def test_amend_check_over_mcp_reopens_work_and_is_audited(operator):
     (operator / "check_login.py").write_text("import sys\nsys.exit(0)  # revised\n", encoding="utf-8")
     amended = await _call("amend_check", {
         "spec_id": sid, "requirement_id": "R1", "command": "python check_login.py",
-        "files": ["check_login.py"], "reason": "login flow revised",
+        "files": ["check_login.py"], "reason": "login flow revised", "expect_baseline": "pass",
     })
     assert amended["file_hashes"]["check_login.py"]
     assert (await _call("complete_task", {"spec_id": sid, "task_id": "t1", "evidence": "e"}))["accepted"] is True

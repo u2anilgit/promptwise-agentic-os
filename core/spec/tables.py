@@ -62,5 +62,7 @@ class CheckRow(Base):
     files: Mapped[list] = mapped_column(JSON)
     file_hashes: Mapped[dict] = mapped_column(JSON)
     frozen_at: Mapped[float] = mapped_column(Float)
+    expect_baseline: Mapped[str] = mapped_column(String(8), default="fail", server_default="fail")
+    baseline: Mapped[str] = mapped_column(String(12), default="unverified", server_default="unverified")
     # One frozen check per requirement: a command may run many tests and files[] lists them all.
     __table_args__ = (UniqueConstraint("spec_id", "requirement_id"),)

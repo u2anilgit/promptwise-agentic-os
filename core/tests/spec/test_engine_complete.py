@@ -12,14 +12,14 @@ from .conftest import REQS, STANDARD_CHECKS, audit_records, checks, interactive_
 GROUNDED = 'python -c "pass"'
 
 
-def _tasked(project, test_command=GROUNDED, tasks=None, pre=None):
+def _tasked(project, test_command=GROUNDED, tasks=None, pre=None, check_list=None):
     tmp, config = project
     config["verify"]["test_command"] = test_command
     if pre:
         pre(tmp)
     spec = specify_feature("add login", list(REQS), config=config, root=tmp)
     plan_feature(spec.spec_id, "just do it", config=config, root=tmp)
-    tasks_feature(spec.spec_id, tasks or interactive_tasks(), checks(*STANDARD_CHECKS), config=config, root=tmp)
+    tasks_feature(spec.spec_id, tasks or interactive_tasks(), check_list or checks(*STANDARD_CHECKS), config=config, root=tmp)
     return spec.spec_id
 
 
@@ -81,7 +81,7 @@ def test_amend_check_is_audited_and_unblocks_the_task(project):
     spec_id = _tasked(project)
     (tmp / "check_login.py").write_text("import sys\nsys.exit(0)  # legitimately updated\n", encoding="utf-8")
     new = amend_check(
-        spec_id, "R1", AcceptanceCheck(requirement_id="R1", command="python check_login.py", files=["check_login.py"]),
+        spec_id, "R1", AcceptanceCheck(requirement_id="R1", command="python check_login.py", files=["check_login.py"], expect_baseline="pass"),
         reason="login flow changed after review", config=config, root=tmp,
     )
     assert new.file_hashes["check_login.py"]
@@ -94,7 +94,7 @@ def test_amend_check_is_audited_and_unblocks_the_task(project):
 def test_amend_check_validates_its_input(project):
     tmp, config = project
     spec_id = _tasked(project)
-    good = AcceptanceCheck(requirement_id="R1", command="python check_login.py", files=["check_login.py"])
+    good = AcceptanceCheck(requirement_id="R1", command="python check_login.py", files=["check_login.py"], expect_baseline="pass")
     with pytest.raises(ValueError, match="reason"):
         amend_check(spec_id, "R1", good, reason="  ", config=config, root=tmp)
     with pytest.raises(ValueError, match="requirement"):
@@ -106,7 +106,8 @@ def test_amend_check_validates_its_input(project):
 
 
 def test_a_failing_acceptance_check_rejects_the_task(project):
-    spec_id = _tasked(project, pre=lambda tmp: (tmp / "check_login.py").write_text("import sys\nsys.exit(1)\n", encoding="utf-8"))
+    spec_id = _tasked(project, pre=lambda tmp: (tmp / "check_login.py").write_text("import sys\nsys.exit(1)\n", encoding="utf-8"),
+                      check_list=checks(("R1", "check_login.py", "fail"), ("R2", "check_logout.py")))
     result = _complete(project, spec_id, "t1")
     assert not result.accepted
     assert "acceptance_check_failed:R1" in result.reasons
@@ -122,7 +123,8 @@ def test_a_failing_verify_gate_rejects_the_task(project):
 
 def test_a_hanging_check_times_out_without_raising(project):
     project[1]["spec"]["check_timeout_seconds"] = 1
-    spec_id = _tasked(project, pre=lambda tmp: (tmp / "check_login.py").write_text("import time\ntime.sleep(60)\n", encoding="utf-8"))
+    spec_id = _tasked(project, pre=lambda tmp: (tmp / "check_login.py").write_text("import time\ntime.sleep(60)\n", encoding="utf-8"),
+                      check_list=checks(("R1", "check_login.py", "fail"), ("R2", "check_logout.py")))
     started = time.monotonic()
     result = _complete(project, spec_id, "t1")
     assert time.monotonic() - started < 20

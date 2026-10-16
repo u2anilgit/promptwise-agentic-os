@@ -170,6 +170,8 @@ def spec_status_cmd(spec_id: str) -> None:
     typer.echo(f"stage: {status.stage} ({status.complexity})")
     for req in status.requirements:
         typer.echo(f"  {req.id}: {req.text}")
+    for check in status.checks:
+        typer.echo(f"  check {check.requirement_id}: baseline {check.baseline} (expect {check.expect_baseline})")
     for task in status.tasks:
         suffix = f" - {task.error}" if task.error else ""
         typer.echo(f"  task {task.task_id}: {task.status} (covers {', '.join(task.requirement_ids)}){suffix}")
@@ -182,6 +184,7 @@ def spec_amend(
     command: str = typer.Option(...),
     file: list[str] = typer.Option(..., "--file", help="File the check depends on (repeat)"),
     reason: str = typer.Option(..., help="Why the check is changing (audited)"),
+    expect_baseline: str = typer.Option("fail", help="fail: the new check must fail now; pass: explicit regression guard"),
 ) -> None:
     """Deliberately replace a frozen acceptance check; tasks that relied on it are reopened."""
     from core.spec import engine
@@ -189,7 +192,7 @@ def spec_amend(
 
     def action():
         before = {t.task_id: t.status for t in engine.spec_status(spec_id).tasks}
-        engine.amend_check(spec_id, requirement_id, AcceptanceCheck(requirement_id=requirement_id, command=command, files=list(file)), reason=reason)
+        engine.amend_check(spec_id, requirement_id, AcceptanceCheck(requirement_id=requirement_id, command=command, files=list(file), expect_baseline=expect_baseline), reason=reason)  # type: ignore[arg-type]
         after = {t.task_id: t.status for t in engine.spec_status(spec_id).tasks}
         return [tid for tid, was in before.items() if was == "done" and after.get(tid) == "pending"]
 

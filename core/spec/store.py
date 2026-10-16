@@ -128,6 +128,8 @@ def _check_from_row(row: CheckRow) -> FrozenCheck:
         command=row.command,
         files=list(row.files),
         file_hashes=dict(row.file_hashes),
+        expect_baseline=row.expect_baseline,  # type: ignore[arg-type]
+        baseline=row.baseline,  # type: ignore[arg-type]
     )
 
 
@@ -142,6 +144,8 @@ def save_frozen_checks(session: Session, spec_id: str, checks: list[FrozenCheck]
                 files=list(c.files),
                 file_hashes=dict(c.file_hashes),
                 frozen_at=now,
+                expect_baseline=c.expect_baseline,
+                baseline=c.baseline,
             )
         )
     session.flush()
@@ -160,5 +164,6 @@ def replace_frozen_check(session: Session, spec_id: str, requirement_id: str, ne
         raise ValueError(f"no frozen check for requirement '{requirement_id}' of spec '{spec_id}'")
     old = _check_from_row(row)
     row.command, row.files, row.file_hashes, row.frozen_at = new.command, list(new.files), dict(new.file_hashes), time.time()
+    row.expect_baseline, row.baseline = new.expect_baseline, new.baseline
     session.flush()
     return old

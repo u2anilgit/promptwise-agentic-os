@@ -29,7 +29,13 @@ def project(tmp_path):
 
 
 def checks(*pairs):
-    return [AcceptanceCheck(requirement_id=r, command=f"python {f}", files=[f]) for r, f in pairs]
+    """pairs are (requirement_id, file) or (requirement_id, file, expect_baseline). Fixture scripts pass from
+    the start, so they default to explicit regression guards (expect_baseline='pass')."""
+    out = []
+    for pair in pairs:
+        rid, f, *rest = pair
+        out.append(AcceptanceCheck(requirement_id=rid, command=f"python {f}", files=[f], expect_baseline=rest[0] if rest else "pass"))
+    return out
 
 
 STANDARD_CHECKS = (("R1", "check_login.py"), ("R2", "check_logout.py"))

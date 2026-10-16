@@ -192,6 +192,25 @@ def _check_file(base: Path, relative: str, requirement_id: str) -> Path:
     return path
 
 
+def _observe_baseline(check: FrozenCheck, base: Path, config: dict[str, Any]) -> FrozenCheck:
+    """Run the check once before the work exists. A check that cannot fail proves nothing."""
+    rid = check.requirement_id
+    if _spec_setting(config, "enforce_command_policy", True):
+        action = _command_action(check.command, base)
+        if not check_policy(action, config).allowed:
+            raise ValueError(f"baseline run of the check for requirement '{rid}' was denied by policy ({action})")
+    outcome = run_command(f"baseline:{rid}", check.command, base, timeout=int(_spec_setting(config, "check_timeout_seconds", 300)))
+    observed = "passed" if (outcome.ran and outcome.passed) else "failed"
+    if check.expect_baseline == "fail" and observed == "passed":
+        raise ValueError(
+            f"acceptance check for requirement '{rid}' already passes before implementation (it is vacuous or the "
+            "requirement is already satisfied); fix the check, or set expect_baseline='pass' if it guards behaviour that must keep working"
+        )
+    if check.expect_baseline == "pass" and observed == "failed":
+        raise ValueError(f"acceptance check for requirement '{rid}' is declared a regression guard (expect_baseline='pass') but already fails; fix the check or the code first")
+    return check.model_copy(update={"baseline": observed})
+
+
 def _freeze_checks(spec: SpecArtifact, checks: list[AcceptanceCheck], base: Path, config: dict[str, Any]) -> list[FrozenCheck]:
     seen: set[str] = set()
     for c in checks:
@@ -210,7 +229,7 @@ def _freeze_checks(spec: SpecArtifact, checks: list[AcceptanceCheck], base: Path
         hashes: dict[str, str] = {}
         for f in c.files:
             hashes[f] = file_sha256(_check_file(base, f, c.requirement_id))
-        frozen.append(FrozenCheck(requirement_id=c.requirement_id, command=c.command, files=list(c.files), file_hashes=hashes))
+        frozen.append(FrozenCheck(requirement_id=c.requirement_id, command=c.command, files=list(c.files), file_hashes=hashes, expect_baseline=c.expect_baseline))
     return frozen
 
 
@@ -237,7 +256,7 @@ def tasks_feature(
             tasks = [TaskNode(id="T1", requirement_ids=[r.id for r in spec.requirements])]
 
         _validate_tasks(spec, tasks)
-        frozen = _freeze_checks(spec, checks, base, config)
+        frozen = [_observe_baseline(f, base, config) for f in _freeze_checks(spec, checks, base, config)]
 
         if stage == "specified":  # trivial path: auto-plan
             store.save_plan(session, PlanArtifact(spec_id=spec_id, approach="(trivial: auto-planned)", created_at=time.time(), requirements_sha256=requirements_hash(spec.requirements)))
@@ -261,6 +280,7 @@ def tasks_feature(
         "artifact_sha256": _sha({"tasks": [t.id for t in tasks], "checks": [c.model_dump() for c in frozen]}),
         "task_count": len(tasks),
         "unreferenced_check_files": _unreferenced_check_files(checks),
+        "baselines": {f.requirement_id: f.baseline for f in frozen},
     })
     return TasksResult(spec_id=spec_id, frozen=frozen, automated=automated)
 
@@ -271,6 +291,7 @@ class CompletionResult(BaseModel):
     status: str
     reasons: list[str] = []
     verify: VerifyResult | None = None
+    independence: dict[str, bool] = {}
 
 
 def _unchanged(base: Path, check: FrozenCheck) -> list[str]:
@@ -336,6 +357,10 @@ def complete_task(
     if modified:
         return reject(modified)
 
+    unproven = [f"baseline_not_proven:{c.requirement_id}" for c in task_checks if c.baseline == "unverified"]
+    if unproven:
+        return reject(unproven)
+
     if _spec_setting(config, "enforce_command_policy", True):
         denied: dict[str, str] = {}
         for c in task_checks:
@@ -363,8 +388,9 @@ def complete_task(
     with session_scope(config, root) as session:
         store.set_task_status(session, spec_id, task_id, "done")
         store.set_stage(session, spec_id, "implementing")
-    _audit(config, "complete_task", spec_id, {"task_id": task_id, "grounded": verify.grounded, "checks": [c.requirement_id for c in task_checks]})
-    return CompletionResult(task_id=task_id, accepted=True, status="done", verify=verify)
+    independence = {"baseline_red": all(c.baseline == "failed" for c in task_checks), "mutation": False, "reviewer": False}
+    _audit(config, "complete_task", spec_id, {"task_id": task_id, "grounded": verify.grounded, "checks": [c.requirement_id for c in task_checks], "independence": independence})
+    return CompletionResult(task_id=task_id, accepted=True, status="done", verify=verify, independence=independence)
 
 
 def amend_check(
@@ -386,7 +412,10 @@ def amend_check(
     hashes: dict[str, str] = {}
     for f in new_check.files:
         hashes[f] = file_sha256(_check_file(base, f, requirement_id))
-    new = FrozenCheck(requirement_id=requirement_id, command=new_check.command, files=list(new_check.files), file_hashes=hashes)
+    new = _observe_baseline(
+        FrozenCheck(requirement_id=requirement_id, command=new_check.command, files=list(new_check.files), file_hashes=hashes, expect_baseline=new_check.expect_baseline),
+        base, config,
+    )
 
     with session_scope(config, root) as session:
         _require_stage(session, spec_id, ("tasked", "implementing", "verified"), "amend_check")
@@ -483,6 +512,7 @@ class SpecStatus(BaseModel):
     stage: str
     requirements: list[Requirement]
     tasks: list[TaskRecord]
+    checks: list[FrozenCheck] = []
 
 
 def spec_status(spec_id: str, config: dict[str, Any] | None = None, root: Path | None = None) -> SpecStatus:
@@ -496,4 +526,5 @@ def spec_status(spec_id: str, config: dict[str, Any] | None = None, root: Path |
             spec_id=spec_id, request=spec.request, complexity=spec.complexity,
             stage=store.get_stage(session, spec_id) or "specified",
             requirements=spec.requirements, tasks=store.get_tasks(session, spec_id),
+            checks=store.get_frozen_checks(session, spec_id),
         )

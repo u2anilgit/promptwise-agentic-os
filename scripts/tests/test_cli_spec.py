@@ -25,8 +25,8 @@ def proj(tmp_path, monkeypatch):
         {"id": "t2", "requirement_ids": ["R2"], "depends_on": ["t1"]},
     ]), encoding="utf-8")
     (tmp_path / "checks.json").write_text(json.dumps([
-        {"requirement_id": "R1", "command": "python check_login.py", "files": ["check_login.py"]},
-        {"requirement_id": "R2", "command": "python check_logout.py", "files": ["check_logout.py"]},
+        {"requirement_id": "R1", "command": "python check_login.py", "files": ["check_login.py"], "expect_baseline": "pass"},
+        {"requirement_id": "R2", "command": "python check_logout.py", "files": ["check_logout.py"], "expect_baseline": "pass"},
     ]), encoding="utf-8")
     return tmp_path
 
@@ -83,7 +83,7 @@ def test_amend_reopens_work(proj):
     assert runner.invoke(app, ["spec", "complete", spec_id, "t1", "--evidence", "e"]).exit_code == 0
     (proj / "check_login.py").write_text("import sys\nsys.exit(0)  # revised\n", encoding="utf-8")
     amended = runner.invoke(app, ["spec", "amend", spec_id, "R1", "--command", "python check_login.py",
-                                  "--file", "check_login.py", "--reason", "flow changed"])
+                                  "--file", "check_login.py", "--reason", "flow changed", "--expect-baseline", "pass"])
     assert amended.exit_code == 0 and "reopened: t1" in amended.stdout
 
 
