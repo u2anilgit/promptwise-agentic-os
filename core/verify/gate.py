@@ -75,4 +75,4 @@ def verify_output(
         else:
             retry_loop_broken = record_failure(config, ledger_key, _signature(results))
 
-    return VerifyResult(passed=passed, results=results, blocked_reason=blocked_reason, retry_loop_broken=retry_loop_broken)
+    return VerifyResult(passed=passed, results=results, blocked_reason=blocked_reason, retry_loop_broken=retry_loop_broken, grounded=test_result.ran)

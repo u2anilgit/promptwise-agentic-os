@@ -78,3 +78,21 @@ def test_verify_output_with_no_explicit_config_resolves_from_cwd_not_process_cwd
     assert result.passed is True
     tests_result = next(r for r in result.results if r.tool == "tests")
     assert tests_result.ran is True  # proves the target project's own config was picked up
+
+
+def test_verify_output_is_ungrounded_when_no_test_command_is_configured(tmp_path):
+    result = verify_output(diff="c", spec="s", cwd=tmp_path, config=_write_project(tmp_path, ""))
+    assert result.passed is True
+    assert result.grounded is False
+
+
+def test_verify_output_is_grounded_when_the_test_command_ran_and_passed(tmp_path):
+    result = verify_output(diff="c", spec="s", cwd=tmp_path, config=_write_project(tmp_path, 'python -c "pass"'))
+    assert result.passed is True
+    assert result.grounded is True
+
+
+def test_verify_output_is_grounded_but_not_passed_when_tests_fail(tmp_path):
+    result = verify_output(diff="c", spec="s", cwd=tmp_path, config=_write_project(tmp_path, 'python -c "import sys; sys.exit(1)"'))
+    assert result.passed is False
+    assert result.grounded is True

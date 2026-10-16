@@ -26,3 +26,6 @@ class VerifyResult(BaseModel):
     results: list[ToolRunResult]
     blocked_reason: str | None = None
     retry_loop_broken: bool = False
+    # True iff a configured test command actually ran. A pass with grounded=False
+    # is vacuous (nothing was tested) and must not be treated as proof of correctness.
+    grounded: bool = False
