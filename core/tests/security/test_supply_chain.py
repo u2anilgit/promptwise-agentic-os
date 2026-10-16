@@ -86,6 +86,17 @@ def test_check_dependencies_warns_on_lock_drift(tmp_path):
     assert "pydantic" in result.message
 
 
+def test_lock_drift_message_is_capped_but_counts_everything(tmp_path):
+    cfg = _config(tmp_path, lock=False)
+    cfg["security"]["lockfile_path"] = str(tmp_path / "big.lock")
+    pins = "".join(f"pkg{i}==1.0 \\\n    --hash={HASH}\n" for i in range(9))
+    (tmp_path / "big.lock").write_text(pins, encoding="utf-8")
+    result = check_dependencies(cfg, installed={f"pkg{i}": "2.0" for i in range(9)})
+    assert result.status == "WARN"
+    assert "9 lockfile problem" in result.message and "(+4 more)" in result.message
+    assert result.message.count("installed 2.0") == 5
+
+
 def test_check_dependencies_warns_when_lock_entry_has_no_hash(tmp_path):
     cfg = _config(tmp_path)
     _write(tmp_path / "req.lock", "pydantic==2.8.0\n")

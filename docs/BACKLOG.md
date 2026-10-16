@@ -298,7 +298,7 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 
 ### From Phase 3.5 build, 2026-10-16
 
-- [ ] **Generate and commit a real hash-pinned `requirements.lock`** (`uv pip compile --generate-hashes`; `uv` not installed in dev env) and decide LiteLLM posture — it is named in the locked stack but is not yet a dependency; when added, pin exact version and consider a sandboxed sidecar behind a thin provider interface. `doctor` currently WARNs `deps.integrity` (no lockfile).
+- [x] **DONE 2026-10-16 (branch feat/lockfile-and-llm-posture):** hash-pinned `requirements.lock` + `requirements-dev.lock` committed and validated (full suite 469 passed on Python 3.12.8 installed strictly from the dev lock); LiteLLM posture decided (not a dependency; see ARCHITECTURE.md). Original: **Generate and commit a real hash-pinned `requirements.lock`** (`uv pip compile --generate-hashes`; `uv` not installed in dev env) and decide LiteLLM posture — it is named in the locked stack but is not yet a dependency; when added, pin exact version and consider a sandboxed sidecar behind a thin provider interface. `doctor` currently WARNs `deps.integrity` (no lockfile).
 - [ ] **Persist memory provenance/trust tier** — `tag_untrusted`/`scan_for_injection` exist and `record_memory` audits flags, but facts carry no stored trust tier, source or TTL (needs a store migration — blocked on the SQLAlchemy/Alembic decision). Also wrap recalled facts with `tag_untrusted` at the MCP boundary once `query_memory` is exposed.
 - [ ] **Apply `tag_untrusted` to outbound MCP client results** when an outbound MCP client exists; same for `guard_tool` pinning of third-party servers.
 - [ ] `live_tool_spec` reads FastMCP's private `_tool_manager`; a test pins it to `list_tools()`, but replace with a public accessor if the SDK adds one.
@@ -323,6 +323,14 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 - [ ] Check the MCP server against the 2026-07-28 stateless spec revision.
 
 - [ ] Review minors deferred (mcp-exposure): `record_memory`/`converge_feature`/error strings are not `<untrusted>`-wrapped; per-call resolve of `Path.resolve()` TOCTOU on subdirectories after confinement; `os.walk` in the code index may follow junctions out of the root; `semgrep_config` accepted from operator only now but remote rule URLs are not validated; symlink-escape test is skipped without privilege (a junction-based test would give real coverage on Windows); `gateway.allowed_roots` empty means gateway cwd only — multi-root deployments need explicit entries.
+
+### From lockfile work, 2026-10-16
+
+- [ ] `compose/gateway.Dockerfile` now installs from the lock and copies `policies/`, `security/`, `tool_registry.yaml` — verified only by simulating its steps (hash-verified `pip install` + app import); the Docker daemon was not running, so an actual `docker compose build` + `up` check is still owed.
+- [ ] `.github/workflows/ci.yml` is unverified (cannot run GitHub Actions locally) and uses version tags (`actions/checkout@v4`, `actions/setup-python@v5`); pin actions by commit SHA as part of the supply-chain posture.
+- [ ] `pyproject.toml` lower bounds (e.g. `fastapi>=0.115`) are older than anything tested (lock resolves `fastapi 0.143.3`, `starlette 1.8.0`); raise floors to the tested versions or add a floor-version CI job.
+- [ ] Locked/tested set diverges from the earlier dev environment (`fastapi 0.115.12`); the suite passes on both, but only the lock set is the supported one.
+- [ ] Re-lock cadence: schedule a periodic `--upgrade` + full-suite validation and an advisory check against `security/known_bad_packages.yaml`.
 
 ## Resolved
 

@@ -29,6 +29,20 @@ CLI + core verb `run_diagnostics()`. Runs a fixed set of core checks, then disco
 
 Exit code is non-zero if any check is FAIL, so `promptwise doctor` is CI-safe (`compose/` bundle runs it as a healthcheck).
 
+## 2b. Dependency locking (supply chain)
+
+`requirements.lock` (runtime) and `requirements-dev.lock` (runtime + dev) pin every package, including transitive ones, with sha256 hashes. They are universal for Python 3.12-3.13 (`requires-python = ">=3.12,<3.14"`). The image (`compose/gateway.Dockerfile`) and CI install only from them (`pip install --require-hashes -r requirements.lock`, `uv pip sync --require-hashes requirements-dev.lock`), so an unexpected or tampered wheel fails the install. `promptwise doctor` (`deps.integrity`) FAILs on a package listed in `security/known_bad_packages.yaml` and WARNs when the environment differs from the lock; fix a WARN with `uv pip sync --require-hashes requirements.lock`.
+
+Regenerate (uv keeps existing pins as preferences, so only intended bumps change):
+
+```
+uv pip compile pyproject.toml --universal --python-version 3.12 --generate-hashes --no-header -o requirements.lock
+uv pip compile pyproject.toml --universal --python-version 3.12 --generate-hashes --no-header --extra dev -o requirements-dev.lock
+# bump one package: add  --upgrade-package <name>
+```
+
+A lock is only trusted after it is exercised: create a venv from the dev lock (`uv venv --python 3.12`, `uv pip sync --require-hashes requirements-dev.lock`, `uv pip install --no-deps -e .`) and run the full suite in it. `core/tests/security/test_lockfiles.py` guards that every pin is hashed, none is on the known-bad list, every direct dependency is present, and LiteLLM is absent. Add a bad release to `security/known_bad_packages.yaml` the moment an advisory lands.
+
 ## 3. Support bundle
 
 `promptwise support-bundle [--out path.zip]` → `generate_support_bundle()`. Collects:

@@ -28,6 +28,7 @@ from core.diagnostics.models import CheckResult
 
 DEFAULT_KNOWN_BAD_PATH = "security/known_bad_packages.yaml"
 DEFAULT_LOCKFILE_PATH = "requirements.lock"
+MAX_PROBLEMS_SHOWN = 5
 
 
 class BadPackage(BaseModel):
@@ -135,5 +136,10 @@ def _check(config: dict[str, Any], installed: Mapping[str, str] | None) -> Check
         if have is not None and not _same_version(have, entry.version):
             problems.append(f"{entry.name} installed {have} != locked {entry.version}")
     if problems:
-        return CheckResult(name="deps.integrity", status="WARN", message="; ".join(problems))
+        shown = "; ".join(problems[:MAX_PROBLEMS_SHOWN])
+        more = f" (+{len(problems) - MAX_PROBLEMS_SHOWN} more)" if len(problems) > MAX_PROBLEMS_SHOWN else ""
+        return CheckResult(
+            name="deps.integrity", status="WARN",
+            message=f"{len(problems)} lockfile problem(s): {shown}{more} - reinstall from the lock: `uv pip sync --require-hashes {lock_path.name}`",
+        )
     return CheckResult(name="deps.integrity", status="PASS", message="no known-bad packages; lockfile pins match and are hashed")

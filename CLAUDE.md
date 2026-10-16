@@ -29,7 +29,7 @@ One sentence: *plug in any agent and any model, get routing that cuts cost 60%+,
 
 ## Tech stack (locked — see `docs/ARCHITECTURE.md` § Stack Rationale for why)
 
-- **Core engine / gateway:** Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.0 + SQLite (Postgres-compatible schema from day one), Qdrant client, LiteLLM (provider abstraction), Alembic (migrations).
+- **Core engine / gateway:** Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.0 + SQLite (Postgres-compatible schema from day one), Qdrant client, LiteLLM (provider abstraction — not yet a dependency, see `docs/ARCHITECTURE.md` "LiteLLM posture"), Alembic (migrations).
 - **Dashboard / UI:** TypeScript, React 18, Vite, Tailwind, shadcn/ui, TanStack Query, WebSocket client for live audit/cost feed.
 - **Agent integration:** MCP server via the official Python `mcp` SDK, hosted in-process inside the gateway (protocol-compatible with Claude Code/Cursor/OpenCode clients) calling core verbs directly — no cross-language hop; this is what `docs/ARCHITECTURE.md`'s stack rationale means by "one language across gateway, verify-gate, and MCP servers" (resolved 2026-08-21, Phase 2 planning — a prior draft of this line named the TypeScript MCP SDK, which contradicted that rationale and was never built). OpenAI-compatible proxy endpoint via LiteLLM for raw model routing from any tool.
 - **Local inference:** Ollama. **Sandbox:** Docker (default), gVisor/Firecracker deferred. **Vector store:** Qdrant. **Structured store:** SQLite → Postgres.
