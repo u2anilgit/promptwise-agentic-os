@@ -47,6 +47,156 @@ def pin_tools() -> None:
     typer.echo(f"pinned {len(pinned)} tool(s): {', '.join(pinned) or 'none'}")
 
 
+spec_app = typer.Typer(help="Spec-driven workflow: specify -> plan -> tasks -> complete -> verify")
+app.add_typer(spec_app, name="spec")
+
+_SPEC_TASK_KEYS = {"id", "requirement_ids", "depends_on", "expected_symbols", "task_type"}
+
+
+def _spec_run(action):
+    """Run a spec verb; a ValueError (stage order, bad input, bad JSON) or OSError is a one-line error, exit 2."""
+    try:
+        return action()
+    except (ValueError, OSError) as exc:
+        typer.echo(f"error: {exc}")
+        raise typer.Exit(code=2)
+
+
+def _load_json_list(path: Path) -> list[dict]:
+    import json
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
+        raise ValueError(f"{path} must contain a JSON list of objects")
+    return data
+
+
+@spec_app.command("specify")
+def spec_specify(
+    request: str,
+    requirement: list[str] = typer.Option(..., "--requirement", "-r", help="One requirement sentence (repeat for several)"),
+    complexity: str = typer.Option("standard", help="standard or trivial (one requirement only)"),
+) -> None:
+    """Record a feature request and its requirements (numbered R1, R2, ...)."""
+    from core.spec import engine
+
+    result = _spec_run(lambda: engine.specify_feature(request, list(requirement), complexity=complexity))  # type: ignore[arg-type]
+    typer.echo(f"spec_id {result.spec_id}")
+    for req in result.requirements:
+        typer.echo(f"{req.id}: {req.text}")
+    for violation in result.violations:
+        typer.echo(f"warning: EARS {violation.requirement_id}: {violation.reason}")
+
+
+@spec_app.command("plan")
+def spec_plan(spec_id: str, approach: str) -> None:
+    """Record the implementation approach."""
+    from core.spec import engine
+
+    _spec_run(lambda: engine.plan_feature(spec_id, approach))
+    typer.echo(f"planned {spec_id}")
+
+
+@spec_app.command("tasks")
+def spec_tasks(
+    spec_id: str,
+    tasks: Path = typer.Option(..., help="JSON list: [{id, requirement_ids, depends_on?, expected_symbols?, task_type?}]"),
+    checks: Path = typer.Option(..., help="JSON list: [{requirement_id, command, files: [...]}]"),
+) -> None:
+    """Break the plan into tasks and freeze one acceptance check per requirement."""
+    from core.spec import engine
+    from core.spec.models import AcceptanceCheck, TaskNode
+
+    def action():
+        raw_tasks = _load_json_list(tasks)
+        for raw in raw_tasks:
+            unknown = set(raw) - _SPEC_TASK_KEYS
+            if unknown:
+                raise ValueError(f"task '{raw.get('id', '?')}' has unsupported keys {sorted(unknown)}")
+        return engine.tasks_feature(
+            spec_id, [TaskNode(**raw) for raw in raw_tasks], [AcceptanceCheck(**raw) for raw in _load_json_list(checks)]
+        )
+
+    result = _spec_run(action)
+    typer.echo(f"frozen {len(result.frozen)} acceptance check(s); stage tasked")
+
+
+@spec_app.command("complete")
+def spec_complete(spec_id: str, task_id: str, evidence: str = typer.Option(..., help="What was done"), cwd: Path | None = None) -> None:
+    """Claim a task is done; accepted only through the frozen, grounded gate."""
+    from core.spec import engine
+
+    result = _spec_run(lambda: engine.complete_task(spec_id, task_id, evidence, cwd=cwd))
+    if result.accepted:
+        grounded = "grounded" if result.verify and result.verify.grounded else "ungrounded (allowed by config)"
+        typer.echo(f"accepted task {task_id} ({grounded})")
+        return
+    typer.echo(f"rejected task {task_id}: {', '.join(result.reasons)}")
+    raise typer.Exit(code=1)
+
+
+@spec_app.command("verify")
+def spec_verify(spec_id: str) -> None:
+    """Exit 0 only if every task is done and every requirement is covered."""
+    from core.spec import engine
+
+    result = _spec_run(lambda: engine.verify_feature(spec_id))
+    if result.verified:
+        typer.echo(f"verified {spec_id}")
+        return
+    typer.echo(f"not verified: outstanding {result.outstanding}, uncovered requirements {result.uncovered_requirements}")
+    raise typer.Exit(code=1)
+
+
+@spec_app.command("converge")
+def spec_converge(spec_id: str) -> None:
+    """Read-only drift report; exit 1 if the spec is stale."""
+    from core.spec import engine
+
+    report = _spec_run(lambda: engine.converge_feature(spec_id))
+    if report.stale:
+        typer.echo(f"stale: {', '.join(report.reasons)}")
+        raise typer.Exit(code=1)
+    typer.echo(f"not stale ({report.done_tasks}/{report.planned_tasks} tasks done)")
+
+
+@spec_app.command("status")
+def spec_status_cmd(spec_id: str) -> None:
+    """Show stage, requirements and task statuses."""
+    from core.spec import engine
+
+    status = _spec_run(lambda: engine.spec_status(spec_id))
+    typer.echo(f"spec {status.spec_id}: {status.request}")
+    typer.echo(f"stage: {status.stage} ({status.complexity})")
+    for req in status.requirements:
+        typer.echo(f"  {req.id}: {req.text}")
+    for task in status.tasks:
+        suffix = f" - {task.error}" if task.error else ""
+        typer.echo(f"  task {task.task_id}: {task.status} (covers {', '.join(task.requirement_ids)}){suffix}")
+
+
+@spec_app.command("amend")
+def spec_amend(
+    spec_id: str,
+    requirement_id: str,
+    command: str = typer.Option(...),
+    file: list[str] = typer.Option(..., "--file", help="File the check depends on (repeat)"),
+    reason: str = typer.Option(..., help="Why the check is changing (audited)"),
+) -> None:
+    """Deliberately replace a frozen acceptance check; tasks that relied on it are reopened."""
+    from core.spec import engine
+    from core.spec.models import AcceptanceCheck
+
+    def action():
+        before = {t.task_id: t.status for t in engine.spec_status(spec_id).tasks}
+        engine.amend_check(spec_id, requirement_id, AcceptanceCheck(requirement_id=requirement_id, command=command, files=list(file)), reason=reason)
+        after = {t.task_id: t.status for t in engine.spec_status(spec_id).tasks}
+        return [tid for tid, was in before.items() if was == "done" and after.get(tid) == "pending"]
+
+    reopened = _spec_run(action)
+    typer.echo(f"amended {requirement_id} of {spec_id}; reopened: {', '.join(reopened) or 'none'}")
+
+
 mcp_cli = typer.Typer(help="Inspect the MCP tool surface")
 app.add_typer(mcp_cli, name="mcp")
 

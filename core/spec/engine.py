@@ -44,6 +44,7 @@ from core.spec.models import (
     Requirement,
     SpecArtifact,
     TaskNode,
+    TaskRecord,
 )
 
 
@@ -473,3 +474,26 @@ def converge_feature(spec_id: str, config: dict[str, Any] | None = None, root: P
         spec_id=spec_id, planned_tasks=len(tasks), done_tasks=done, pending_tasks=len(tasks) - done,
         stale=bool(reasons), reasons=reasons,
     )
+
+
+class SpecStatus(BaseModel):
+    spec_id: str
+    request: str
+    complexity: str
+    stage: str
+    requirements: list[Requirement]
+    tasks: list[TaskRecord]
+
+
+def spec_status(spec_id: str, config: dict[str, Any] | None = None, root: Path | None = None) -> SpecStatus:
+    """Read-only snapshot: stage, requirements and per-task status."""
+    config = _prepare(config, root)
+    with session_scope(config, root) as session:
+        spec = store.get_spec(session, spec_id)
+        if spec is None:
+            raise ValueError(f"unknown spec '{spec_id}'")
+        return SpecStatus(
+            spec_id=spec_id, request=spec.request, complexity=spec.complexity,
+            stage=store.get_stage(session, spec_id) or "specified",
+            requirements=spec.requirements, tasks=store.get_tasks(session, spec_id),
+        )
