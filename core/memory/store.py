@@ -52,6 +52,37 @@ def save_fact(conn: sqlite3.Connection, fact: Fact) -> Fact:
     return fact.model_copy(update={"id": fact_id})
 
 
+_FACT_COLUMNS = "id, text, category, scope, root, session_id, pii, created_at"
+
+
+def _row_to_fact(row: tuple) -> Fact:
+    # Single place that knows _FACT_COLUMNS' positional order.
+    return Fact(id=row[0], text=row[1], category=row[2], scope=row[3], root=row[4], session_id=row[5], pii=bool(row[6]), created_at=row[7])
+
+
+def get_fact(
+    conn: sqlite3.Connection,
+    fact_id: int,
+    scope: str,
+    root: str | None = None,
+    session_id: str | None = None,
+) -> Fact | None:
+    """Fetch one fact by id, but only if it also satisfies the caller's
+    scope/root/session predicates — defense in depth for ids that arrive
+    from the vector store, which is not trusted to have filtered correctly.
+    """
+    sql = f"SELECT {_FACT_COLUMNS} FROM facts WHERE id = ? AND scope = ?"
+    params: list[Any] = [fact_id, scope]
+    if root is not None:
+        sql += " AND root = ?"
+        params.append(root)
+    if session_id is not None:
+        sql += " AND session_id = ?"
+        params.append(session_id)
+    row = conn.execute(sql, params).fetchone()
+    return _row_to_fact(row) if row else None
+
+
 def _sanitize_fts_query(query: str) -> str:
     # FTS5's query syntax treats punctuation specially (AND/OR/NOT, quotes,
     # NEAR, column filters, etc.). A raw user string could be malformed
@@ -72,6 +103,7 @@ def search_fts(
     scope: str,
     root: str | None = None,
     limit: int = 10,
+    session_id: str | None = None,
 ) -> list[Fact]:
     fts_query = _sanitize_fts_query(query)
     if not fts_query:
@@ -86,13 +118,13 @@ def search_fts(
     if root is not None:
         sql += " AND f.root = ?"
         params.append(root)
+    if session_id is not None:
+        sql += " AND f.session_id = ?"
+        params.append(session_id)
     # bm25()'s score is negative; more negative = more relevant. ASC puts
     # the best match first (verified live against a real FTS5 table).
     sql += " ORDER BY bm25(facts_fts) ASC LIMIT ?"
     params.append(limit)
 
     rows = conn.execute(sql, params).fetchall()
-    return [
-        Fact(id=r[0], text=r[1], category=r[2], scope=r[3], root=r[4], session_id=r[5], pii=bool(r[6]), created_at=r[7])
-        for r in rows
-    ]
+    return [_row_to_fact(r) for r in rows]

@@ -76,3 +76,24 @@ def test_search_fts_survives_a_query_that_is_a_bare_fts5_keyword(tmp_path):
     results = search_fts(conn, "NOT", scope="project", root="/repo")
     assert len(results) == 1
     assert "NOT" in results[0].text
+
+
+def test_search_fts_filters_by_session_id_when_given(tmp_path):
+    conn = open_store(_config(tmp_path))
+    save_fact(conn, Fact(text="working the login bug", category="context", scope="session", session_id="s1", created_at=time.time()))
+    save_fact(conn, Fact(text="working the login bug elsewhere", category="context", scope="session", session_id="s2", created_at=time.time()))
+
+    results = search_fts(conn, "login", scope="session", session_id="s1")
+    assert [r.session_id for r in results] == ["s1"]
+
+
+def test_get_fact_enforces_scope_root_and_session_predicates(tmp_path):
+    from core.memory.store import get_fact
+
+    conn = open_store(_config(tmp_path))
+    saved = save_fact(conn, Fact(text="alpha", category="decision", scope="project", root="/repo-a", created_at=time.time()))
+
+    assert get_fact(conn, saved.id, scope="project", root="/repo-a").text == "alpha"
+    assert get_fact(conn, saved.id, scope="project", root="/repo-b") is None
+    assert get_fact(conn, saved.id, scope="session") is None
+    assert get_fact(conn, 9999, scope="project") is None

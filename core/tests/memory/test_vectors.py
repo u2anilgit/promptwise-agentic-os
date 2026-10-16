@@ -38,3 +38,11 @@ def test_search_respects_limit():
     for i in range(5):
         upsert_fact(client, fact_id=i, vector=[1.0, 0.0, 0.0, 0.0], scope="project", root="/repo", pii=False)
     assert len(search(client, query_vector=[1.0, 0.0, 0.0, 0.0], scope="project", root="/repo", limit=3)) == 3
+
+
+def test_search_filters_by_session_id_when_given():
+    client = _client()
+    upsert_fact(client, fact_id=1, vector=[1.0, 0.0, 0.0, 0.0], scope="session", root=None, pii=False, session_id="s1")
+    upsert_fact(client, fact_id=2, vector=[1.0, 0.0, 0.0, 0.0], scope="session", root=None, pii=False, session_id="s2")
+
+    assert search(client, query_vector=[1.0, 0.0, 0.0, 0.0], scope="session", session_id="s1") == [1]

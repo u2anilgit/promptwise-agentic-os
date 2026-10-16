@@ -193,3 +193,38 @@ def test_query_memory_degrades_to_bm25_when_vector_search_fails_mid_call(tmp_pat
 
     assert len(results) == 1
     assert "SQLite" in results[0].text
+
+
+def test_query_memory_session_scope_is_isolated_by_session_id(tmp_path):
+    config = _config(tmp_path)
+    client = QdrantClient(":memory:")
+    for sid, text in (("s1", "login bug in session one"), ("s2", "login bug in session two")):
+        record_memory(
+            text, scope="session", session_id=sid, config=config,
+            http_post=_fake_extraction_http_post(text, "context"), qdrant_client=client,
+        )
+
+    results = query_memory(
+        "login", scope="session", session_id="s1", config=config,
+        http_post=_fake_extraction_http_post("unused"), qdrant_client=client,
+    )
+    assert [f.session_id for f in results] == ["s1"]
+
+
+def test_query_memory_is_audited_on_the_normal_path(tmp_path):
+    config = _config(tmp_path)
+    client = QdrantClient(":memory:")
+    record_memory(
+        "decided: use SQLite", scope="project", root=str(tmp_path), config=config,
+        http_post=_fake_extraction_http_post("decided: use SQLite", "decision"), qdrant_client=client,
+    )
+    query_memory(
+        "SQLite", scope="project", root=str(tmp_path), config=config,
+        http_post=_fake_extraction_http_post("unused"), qdrant_client=client,
+    )
+    import json
+
+    lines = (tmp_path / "audit.jsonl").read_text(encoding="utf-8").splitlines()
+    recalls = [json.loads(line) for line in lines if json.loads(line).get("actor") == "query_memory"]
+    assert len(recalls) == 1
+    assert recalls[0]["detail"] == {"result_count": 1, "pii_excluded_count": 0}
