@@ -12,3 +12,19 @@ tools:
     version: 0.1.0
     enabled: true
     description_sha256: 9ee6cd1859c45cbccf8672aa711a622c2f16324f0fba83b787d07c72be853711
+  query_code_index:
+    version: 0.1.0
+    enabled: true
+    description_sha256: 9cb4e4d8254f1c728acfac7cce8f61ac8d98c13827fd896d850223eae031430b
+  record_memory:
+    version: 0.1.0
+    enabled: true
+    description_sha256: e29595af1555c3a2e9147dbb27edb497defca0a3f6418108747bb0e81b9c9d59
+  query_memory:
+    version: 0.1.0
+    enabled: true
+    description_sha256: cbc04c406bd7b6a942bb039e637ed0f330bdd022795ff26a22d3ece74f1fcc1a
+  run_ingestion_sweep:
+    version: 0.1.0
+    enabled: true
+    description_sha256: a23a54c1c7e41f76bdf50b61e0e12fed8bd8e646dcd36dcd1c26d1780f2566bb

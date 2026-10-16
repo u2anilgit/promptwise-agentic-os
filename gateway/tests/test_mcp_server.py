@@ -15,7 +15,7 @@ async def test_mcp_app_has_verify_output_tool():
     assert "verify_output" in tool_names
 
 
-async def test_mcp_call_tool_verify_output_runs_a_real_check(tmp_path):
+async def test_mcp_call_tool_verify_output_runs_a_real_check(operator):
     """End-to-end: drives verify_output the same way a real Claude Code
     session does — through FastMCP's call_tool, not by importing the
     Python function directly. Confirms the MCP arg-marshalling layer
@@ -28,7 +28,7 @@ async def test_mcp_call_tool_verify_output_runs_a_real_check(tmp_path):
         {
             "diff": "add a feature",
             "spec": "the feature must work",
-            "cwd": str(tmp_path),
+            "cwd": str(operator),
             "ledger_key": "",
         },
     )
@@ -76,3 +76,9 @@ async def test_verify_output_is_rejected_when_its_pinned_description_changed(tmp
 
     content = await mcp_server.mcp_app.call_tool("verify_output", {"diff": "x", "cwd": str(tmp_path)})
     assert "changed since it was pinned" in json.loads(content[0].text)["error"]
+
+
+async def test_verify_output_denies_a_cwd_outside_the_allowed_roots(operator, tmp_path_factory):
+    elsewhere = tmp_path_factory.mktemp("elsewhere")
+    content = await mcp_app.call_tool("verify_output", {"diff": "x", "cwd": str(elsewhere)})
+    assert "outside allowed roots" in json.loads(content[0].text)["error"]
