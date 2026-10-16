@@ -19,6 +19,10 @@ paths:
 database:
   url: ""
   path: .promptwise/agentic.sqlite3
+spec:
+  allow_ungrounded: false
+  trivial_max_requirements: 1
+  check_timeout_seconds: 300
 security:
   known_bad_packages_path: security/known_bad_packages.yaml
   lockfile_path: requirements.lock
