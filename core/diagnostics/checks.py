@@ -126,6 +126,23 @@ def _check_audit_chain(config: dict | None = None) -> CheckResult:
     )
 
 
+def _check_db_schema(config: dict) -> CheckResult:
+    from core.db.migrate import current_revision, head_revision, known_revisions
+
+    try:
+        current = current_revision(config)
+        head = head_revision()
+        if current is None:
+            return CheckResult(name="db.schema", status="WARN", message="database not created yet — run `promptwise db upgrade`")
+        if current not in known_revisions():
+            return CheckResult(name="db.schema", status="FAIL", message=f"database revision {current} is newer than this code (head {head}) — upgrade the code, do not downgrade the data")
+        if current != head:
+            return CheckResult(name="db.schema", status="WARN", message=f"database at {current}, code expects {head} — run `promptwise db upgrade`")
+        return CheckResult(name="db.schema", status="PASS", message=f"schema at head ({head})")
+    except Exception as exc:  # noqa: BLE001 — doctor must never crash
+        return CheckResult(name="db.schema", status="WARN", message=f"schema check could not complete: {exc}")
+
+
 def _check_deps_integrity(config: dict) -> CheckResult:
     from core.security.supply_chain import check_dependencies
 
@@ -144,4 +161,5 @@ def run_diagnostics(config: dict | None = None) -> list[CheckResult]:
         _check_audit_chain(config),
         _check_services_gateway(config),
         _check_deps_integrity(config),
+        _check_db_schema(config),
     ]

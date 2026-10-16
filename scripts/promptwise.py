@@ -47,6 +47,20 @@ def pin_tools() -> None:
     typer.echo(f"pinned {len(pinned)} tool(s): {', '.join(pinned) or 'none'}")
 
 
+db_app = typer.Typer(help="Database schema management")
+app.add_typer(db_app, name="db")
+
+
+@db_app.command("upgrade")
+def db_upgrade() -> None:
+    """Apply all pending Alembic migrations (creates the database if absent)."""
+    from core.config.resolve import resolve_config_auto
+    from core.db.migrate import migrate_to_head
+
+    revision = migrate_to_head(resolve_config_auto())
+    typer.echo(f"database at revision {revision}")
+
+
 pack_app = typer.Typer(help="Manage installed packs (docs/ARCHITECTURE.md §3)")
 app.add_typer(pack_app, name="pack")
 

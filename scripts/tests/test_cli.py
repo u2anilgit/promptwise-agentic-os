@@ -110,3 +110,17 @@ def test_support_bundle_command_creates_a_zip(tmp_path):
     result = runner.invoke(app, ["support-bundle", "--out", str(out_path)])
     assert result.exit_code == 0
     assert out_path.exists()
+
+
+def test_db_upgrade_migrates_to_head(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".promptwise").mkdir()
+    (tmp_path / ".promptwise" / "config.yaml").write_text(
+        f"database:\n  url: sqlite:///{(tmp_path / 'cli.db').as_posix()}\n", encoding="utf-8"
+    )
+    result = runner.invoke(app, ["db", "upgrade"])
+    assert result.exit_code == 0
+    assert "revision" in result.stdout
+    from core.db.migrate import current_revision, head_revision
+
+    assert current_revision({"database": {"url": f"sqlite:///{(tmp_path / 'cli.db').as_posix()}"}}) == head_revision()

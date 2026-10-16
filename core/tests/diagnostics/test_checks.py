@@ -15,6 +15,7 @@ def test_run_diagnostics_returns_all_check_names():
         "audit.chain",
         "services.gateway",
         "deps.integrity",
+        "db.schema",
     }
 
 
@@ -205,3 +206,34 @@ def test_audit_chain_check_warns_not_fails_on_missing_log(tmp_path):
     config = {"audit": {"log_path": str(tmp_path / "does-not-exist.jsonl")}}
     result = _check_audit_chain(config)
     assert result.status in ("PASS", "WARN")  # no log yet is a valid, non-broken state
+
+
+def _db_check(tmp_path, stamp=None, migrate=False):
+    from core.db.base import make_engine
+    from core.db.migrate import migrate_to_head
+    from core.diagnostics.checks import _check_db_schema
+
+    config = {"database": {"url": f"sqlite:///{(tmp_path / 'd.db').as_posix()}"}}
+    if migrate:
+        migrate_to_head(config)
+    if stamp:
+        from sqlalchemy import text
+
+        with make_engine(config).begin() as conn:
+            conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL PRIMARY KEY)"))
+            conn.execute(text("INSERT INTO alembic_version VALUES (:v)"), {"v": stamp})
+    return _check_db_schema(config)
+
+
+def test_db_schema_check_warns_when_database_not_created(tmp_path):
+    assert _db_check(tmp_path).status == "WARN"
+
+
+def test_db_schema_check_passes_at_head(tmp_path):
+    assert _db_check(tmp_path, migrate=True).status == "PASS"
+
+
+def test_db_schema_check_fails_when_database_is_newer_than_the_code(tmp_path):
+    result = _db_check(tmp_path, stamp="zzzz_from_the_future")
+    assert result.status == "FAIL"
+    assert "newer" in result.message

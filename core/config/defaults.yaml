@@ -16,6 +16,9 @@ paths:
   packs_registry: packs/registry
   model_catalog: catalog/model_catalog.yaml
   policies_dir: policies
+database:
+  url: ""
+  path: .promptwise/agentic.sqlite3
 security:
   known_bad_packages_path: security/known_bad_packages.yaml
   lockfile_path: requirements.lock
