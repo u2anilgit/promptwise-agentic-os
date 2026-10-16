@@ -29,6 +29,9 @@ from core.orchestrate.models import Dag, DagNode, DagResult
 from core.orchestrate.runner import orchestrate_tasks
 from core.spec import store
 from core.spec.ears import validate_ears
+from core.verify.gate import verify_output
+from core.verify.models import VerifyResult
+from core.verify.runners import run_command
 from core.spec.models import (
     AcceptanceCheck,
     Complexity,
@@ -223,3 +226,112 @@ def tasks_feature(
         "task_count": len(tasks),
     })
     return TasksResult(spec_id=spec_id, frozen=frozen, automated=automated)
+
+
+class CompletionResult(BaseModel):
+    task_id: str
+    accepted: bool
+    status: str
+    reasons: list[str] = []
+    verify: VerifyResult | None = None
+
+
+def _unchanged(base: Path, check: FrozenCheck) -> list[str]:
+    changed = []
+    for f, frozen_hash in check.file_hashes.items():
+        path = base / f
+        if not path.is_file() or file_sha256(path) != frozen_hash:
+            changed.append(f)
+    return changed
+
+
+def complete_task(
+    spec_id: str,
+    task_id: str,
+    evidence: str,
+    cwd: Path | None = None,
+    config: dict[str, Any] | None = None,
+    root: Path | None = None,
+) -> CompletionResult:
+    config = _prepare(config, root)
+    base = Path(root) if root else Path.cwd()
+    work = Path(cwd) if cwd else base
+
+    with session_scope(config, root) as session:
+        _require_stage(session, spec_id, ("tasked", "implementing"), "complete_task")
+        records = {t.task_id: t for t in store.get_tasks(session, spec_id)}
+        if task_id not in records:
+            raise ValueError(f"unknown task '{task_id}' for spec '{spec_id}'")
+        task = records[task_id]
+        frozen = {c.requirement_id: c for c in store.get_frozen_checks(session, spec_id)}
+
+    if task.status == "done":
+        return CompletionResult(task_id=task_id, accepted=True, status="done")
+
+    def reject(reasons: list[str], verify: VerifyResult | None = None) -> CompletionResult:
+        _audit(config, "complete_task", spec_id, {"task_id": task_id, "reasons": reasons}, result="deny")
+        return CompletionResult(task_id=task_id, accepted=False, status=task.status, reasons=reasons, verify=verify)
+
+    if any(records[d].status != "done" for d in task.depends_on if d in records):
+        return reject(["dependency_not_done"])
+
+    task_checks = [frozen[rid] for rid in task.requirement_ids if rid in frozen]
+
+    modified = [f"acceptance_check_modified:{f}" for c in task_checks for f in _unchanged(base, c)]
+    if modified:
+        return reject(modified)
+
+    timeout = int(_spec_setting(config, "check_timeout_seconds", 300))
+    failed = [
+        f"acceptance_check_failed:{c.requirement_id}"
+        for c in task_checks
+        if not run_command(f"acceptance_check:{c.requirement_id}", c.command, base, timeout=timeout).passed
+    ]
+    if failed:
+        return reject(failed)
+
+    verify = verify_output(diff=evidence, spec=None, cwd=work, config=config, ledger_key=f"{spec_id}:{task_id}")
+    if not verify.passed:
+        return reject(["verify_gate_failed"], verify)
+    if not verify.grounded and not _spec_setting(config, "allow_ungrounded", False):
+        return reject(["ungrounded_verification"], verify)
+
+    with session_scope(config, root) as session:
+        store.set_task_status(session, spec_id, task_id, "done")
+        store.set_stage(session, spec_id, "implementing")
+    _audit(config, "complete_task", spec_id, {"task_id": task_id, "grounded": verify.grounded, "checks": [c.requirement_id for c in task_checks]})
+    return CompletionResult(task_id=task_id, accepted=True, status="done", verify=verify)
+
+
+def amend_check(
+    spec_id: str,
+    requirement_id: str,
+    new_check: AcceptanceCheck,
+    reason: str,
+    config: dict[str, Any] | None = None,
+    root: Path | None = None,
+) -> FrozenCheck:
+    config = _prepare(config, root)
+    base = Path(root) if root else Path.cwd()
+    if not reason.strip():
+        raise ValueError("amend_check requires a non-empty reason")
+    if new_check.requirement_id != requirement_id:
+        raise ValueError(f"new_check.requirement_id '{new_check.requirement_id}' does not match requirement '{requirement_id}'")
+
+    hashes: dict[str, str] = {}
+    for f in new_check.files:
+        path = base / f
+        if not path.is_file():
+            raise ValueError(f"acceptance check file '{f}' for requirement '{requirement_id}' does not exist")
+        hashes[f] = file_sha256(path)
+    new = FrozenCheck(requirement_id=requirement_id, command=new_check.command, files=list(new_check.files), file_hashes=hashes)
+
+    with session_scope(config, root) as session:
+        _require_stage(session, spec_id, ("tasked", "implementing", "verified"), "amend_check")
+        old = store.replace_frozen_check(session, spec_id, requirement_id, new)
+    _audit(config, "amend_check", spec_id, {
+        "requirement_id": requirement_id, "reason": reason,
+        "old_command": old.command, "new_command": new.command,
+        "old_hashes": old.file_hashes, "new_hashes": new.file_hashes,
+    })
+    return new
