@@ -17,7 +17,7 @@ async def test_mcp_app_has_verify_output_tool():
 
 async def test_mcp_call_tool_verify_output_runs_a_real_check(operator):
     """End-to-end: drives verify_output the same way a real Claude Code
-    session does — through FastMCP's call_tool, not by importing the
+    session does — through MCPServer's call_tool, not by importing the
     Python function directly. Confirms the MCP arg-marshalling layer
     (str cwd -> Path, empty-string sentinels -> None) actually works,
     closing the ROADMAP Phase 2 acceptance criterion "works against a
@@ -33,10 +33,10 @@ async def test_mcp_call_tool_verify_output_runs_a_real_check(operator):
         },
     )
     # This is the exact path a real Claude Code session takes: a JSON-RPC
-    # tools/call, marshalled through FastMCP into our function, run for
+    # tools/call, marshalled through MCPServer into our function, run for
     # real against tmp_path (no test/lint command configured there, so it's
     # a no-op pass), and serialized back into a text content block.
-    payload = json.loads(content_blocks[0].text)
+    payload = json.loads(content_blocks.content[0].text)
     assert payload["passed"] is True
     assert payload["blocked_reason"] is None
 
@@ -62,7 +62,7 @@ async def test_live_tool_spec_matches_what_clients_are_served():
     served = {t.name: t for t in await mcp_app.list_tools()}["verify_output"]
     description, schema = live_tool_spec("verify_output")
     assert description == served.description
-    assert schema == served.inputSchema
+    assert schema == served.input_schema
 
 
 async def test_verify_output_is_rejected_when_its_pinned_description_changed(tmp_path, monkeypatch):
@@ -79,10 +79,10 @@ async def test_verify_output_is_rejected_when_its_pinned_description_changed(tmp
     monkeypatch.chdir(tmp_path)
 
     content = await mcp_server.mcp_app.call_tool("verify_output", {"diff": "x", "cwd": str(tmp_path)})
-    assert "changed since it was pinned" in json.loads(content[0].text)["error"]
+    assert "changed since it was pinned" in json.loads(content.content[0].text)["error"]
 
 
 async def test_verify_output_denies_a_cwd_outside_the_allowed_roots(operator, tmp_path_factory):
     elsewhere = tmp_path_factory.mktemp("elsewhere")
     content = await mcp_app.call_tool("verify_output", {"diff": "x", "cwd": str(elsewhere)})
-    assert "outside allowed roots" in json.loads(content[0].text)["error"]
+    assert "outside allowed roots" in json.loads(content.content[0].text)["error"]

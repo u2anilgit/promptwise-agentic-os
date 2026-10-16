@@ -1,9 +1,7 @@
 alembic==1.18.4 \
     --hash=sha256:a5ed4adcf6d8a4cb575f3d759f071b03cd6e5c7618eb796cb52497be25bfe19a \
     --hash=sha256:cb6e1fd84b6174ab8dbb2329f86d631ba9559dd78df550b57804d607672cedbc
-    # via
-    #   -c C:/Users/ANIL/AppData/Local/Temp/claude/C--AI-Agentic-OS/6ab3d7f5-c05c-491e-ad09-289f5f59b229/scratchpad/tested2.txt
-    #   promptwise-core (pyproject.toml)
+    # via promptwise-core (pyproject.toml)
 annotated-doc==0.0.5 \
     --hash=sha256:117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101 \
     --hash=sha256:c7e58ce09192557605d8bbd92836d7e1d520ac9580096042c0bfd197efacf1bb
@@ -19,6 +17,7 @@ anyio==4.15.1 \
     --hash=sha256:9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94
     # via
     #   httpx
+    #   httpx2
     #   mcp
     #   sse-starlette
     #   starlette
@@ -361,6 +360,7 @@ h11==0.16.0 \
     --hash=sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86
     # via
     #   httpcore
+    #   httpcore2
     #   uvicorn
 h2==4.4.1 \
     --hash=sha256:0e25f1462b23c9cb82d9eb02e28bc706dac2a68cb457c6a0d74d63c8a2a5d0e6 \
@@ -374,6 +374,10 @@ httpcore==1.0.9 \
     --hash=sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55 \
     --hash=sha256:6e34463af53fd2ab5d807f399a9b45ea31c3dfa2276f15a2c3f00afff6e176e8
     # via httpx
+httpcore2==2.13.1 ; sys_platform != 'emscripten' \
+    --hash=sha256:e0aa977abe17e69a3b820a24542a6fa88702676d83880b8d194dcd18408e5103 \
+    --hash=sha256:e1e05d4f25f7d7d496bfb96748f6f4b67657b03da069b3a68c36069f3db73d0a
+    # via httpx2
 httptools==0.9.0 \
     --hash=sha256:02bc5b3dcb6394b9d825fd62a7bfa0b2943063a3c89abc4492ad45e334a20eb5 \
     --hash=sha256:050f7ab098121873c8f13e35857f97ab60a76185c8302bde9a384939bb7c3b96 \
@@ -497,14 +501,15 @@ httptools==0.9.0 \
 httpx==0.28.1 \
     --hash=sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc \
     --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
-    # via
-    #   -c C:/Users/ANIL/AppData/Local/Temp/claude/C--AI-Agentic-OS/6ab3d7f5-c05c-491e-ad09-289f5f59b229/scratchpad/tested2.txt
-    #   mcp
-    #   qdrant-client
-httpx-sse==0.4.3 \
-    --hash=sha256:0ac1c9fe3c0afad2e0ebb25a934a59f4c7823b60792691f779fad2c5568830fc \
-    --hash=sha256:9b1ed0127459a66014aec3c56bebd93da3c1bc8bb6618c8082039a44889a755d
+    # via qdrant-client
+httpx2==2.13.1 \
+    --hash=sha256:6dff50fabc270ee5fd25d845d0b078ed20564579744d6d962850975996d2f9a4 \
+    --hash=sha256:e48744a19e3af5ee48313d0ce5fe941d5422fae5705ea922a4aabf94d7800dfa
     # via mcp
+httpx2-jsfetch==1.0 ; sys_platform == 'emscripten' \
+    --hash=sha256:70a0e3eabfef7cce5ad9c629f7d01ca05e418f586646f4ddf14782e4c1454c60 \
+    --hash=sha256:cb916b707601e69a07721aabc8f3f6659be3a6893bc1ff5c6f9e02241df2da32
+    # via httpx2
 hyperframe==6.1.0 \
     --hash=sha256:b03380493a519fce58ea5af42e4a42317bf9bd425596f7a0835ffce80f1a42e5 \
     --hash=sha256:f630908a00854a7adeabd6382b43923a4c4cd4b821fcb527e6ab9e15382a3b08
@@ -515,6 +520,7 @@ idna==3.20 \
     # via
     #   anyio
     #   httpx
+    #   httpx2
 jsonschema==4.26.0 \
     --hash=sha256:0c26707e2efad8aa1bfc5b7ce170f3fccc2e4918ff85989ba9ffa9facb2be326 \
     --hash=sha256:d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce
@@ -684,12 +690,14 @@ markupsafe==3.0.4 \
     --hash=sha256:fd9f8797427910198f95bced71ddfed61130d7e349213bfb8466c9c99e2c46a8 \
     --hash=sha256:fdb4ca07ab75ffadab4a8b135ad59cdbb3156b99310f3d565370da74a15d6bd3
     # via mako
-mcp==1.29.0 \
-    --hash=sha256:52d01f334de1868cc3bb2d6604931126a67631f99a6c5d3b82ba47290315ec36 \
-    --hash=sha256:f5a075bb611f23d6f4d080c6a1699fa62772eebc562ba9e66b306ddde1c755f7
-    # via
-    #   -c C:/Users/ANIL/AppData/Local/Temp/claude/C--AI-Agentic-OS/6ab3d7f5-c05c-491e-ad09-289f5f59b229/scratchpad/tested2.txt
-    #   promptwise-core (pyproject.toml)
+mcp==2.3.0 \
+    --hash=sha256:8b147a50441cf059dc88c684e0aeed3687f0aa0f39c6cde7b90330effd2b34d8 \
+    --hash=sha256:dd0c44c089d16453e8ae31a3877a0054d7a2314caaa81f5e0541b9b1734b2377
+    # via promptwise-core (pyproject.toml)
+mcp-types==2.3.0 \
+    --hash=sha256:968efdbdaedfab06adae40d378a34395f1090c5921d4be3c9cde283aaf76d91d \
+    --hash=sha256:d1e46549edb35ee19a94940fcee6d1addd7e589ab7ea92dda83f5d84781fc362
+    # via mcp
 mdurl==0.1.2 \
     --hash=sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8 \
     --hash=sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba
@@ -765,13 +773,13 @@ numpy==2.5.4 \
 opentelemetry-api==1.45.1 \
     --hash=sha256:aa38ed19bcc084ba42782a73255b3582283eced7ad6dddbd6695189e69adfb75 \
     --hash=sha256:b31553efa588ae44bc306f863c785c5333a9ecc091248c6ee68b4b6c87fdedfb
-    # via fastapi
+    # via
+    #   fastapi
+    #   mcp
 packaging==26.2 \
     --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e \
     --hash=sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661
-    # via
-    #   -c C:/Users/ANIL/AppData/Local/Temp/claude/C--AI-Agentic-OS/6ab3d7f5-c05c-491e-ad09-289f5f59b229/scratchpad/tested2.txt
-    #   promptwise-core (pyproject.toml)
+    # via promptwise-core (pyproject.toml)
 portalocker==3.2.0 \
     --hash=sha256:1f3002956a54a8c3730586c5c77bf18fae4149e07eaf1c29fc3faf4d5a3f89ac \
     --hash=sha256:3cdc5f565312224bc570c49337bd21428bba0ef363bbcf58b9ef4a9f11779968
@@ -794,11 +802,10 @@ pydantic==2.13.4 \
     --hash=sha256:45a282cde31d808236fd7ea9d919b128653c8b38b393d1c4ab335c62924d9aba \
     --hash=sha256:c40756b57adaa8b1efeeced5c196f3f3b7c435f90e84ea7f443901bec8099ef6
     # via
-    #   -c C:/Users/ANIL/AppData/Local/Temp/claude/C--AI-Agentic-OS/6ab3d7f5-c05c-491e-ad09-289f5f59b229/scratchpad/tested2.txt
     #   promptwise-core (pyproject.toml)
     #   fastapi
     #   mcp
-    #   pydantic-settings
+    #   mcp-types
     #   qdrant-client
 pydantic-core==2.46.4 \
     --hash=sha256:00c603d540afdd6b80eb39f078f33ebd46211f02f33e34a32d9f053bba711de0 \
@@ -922,10 +929,6 @@ pydantic-core==2.46.4 \
     --hash=sha256:fc3e9034a63de20e15e8ade85358bc6efc614008cab72898b4b4952bea0509ff \
     --hash=sha256:fd8b3d9fd264be37976686c7f65cd52a83f5e84f4bfd2adf9c1d469676bbb6ae
     # via pydantic
-pydantic-settings==2.16.0 \
-    --hash=sha256:5b6c578049ede4db0e2ef3b4eaa4ad4069cfa9211f83fb38df899dfade50a614 \
-    --hash=sha256:7e73acf7f61936a15e5a3b6eedaea29f133357faf7272f2607ba479b049dd7f2
-    # via mcp
 pygments==2.21.0 \
     --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9 \
     --hash=sha256:610ca751c9bc2492b38eb9a38a7fbc93edbbb2d7182edaf34e66ae493dee5c8c
@@ -937,9 +940,7 @@ pyjwt==2.15.1 \
 python-dotenv==1.2.4 \
     --hash=sha256:42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc \
     --hash=sha256:f0d53e69935a851c0dcc78f3ab7aaccd8cabef0b92382b576b824212902873c0
-    # via
-    #   pydantic-settings
-    #   uvicorn
+    # via uvicorn
 python-multipart==0.0.32 \
     --hash=sha256:be54b7f3fa167bb83e4fcd936b887b708f4e57fe75911c02aebf53efaf8d938e \
     --hash=sha256:ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23
@@ -1044,15 +1045,12 @@ pyyaml==6.0.3 \
     --hash=sha256:fa160448684b4e94d80416c0fa4aac48967a969efe22931448d853ada8baf926 \
     --hash=sha256:fc09d0aa354569bc501d4e787133afc08552722d3ab34836a80547331bb5d4a0
     # via
-    #   -c C:/Users/ANIL/AppData/Local/Temp/claude/C--AI-Agentic-OS/6ab3d7f5-c05c-491e-ad09-289f5f59b229/scratchpad/tested2.txt
     #   promptwise-core (pyproject.toml)
     #   uvicorn
 qdrant-client==1.19.0 \
     --hash=sha256:13602a2b3478a95ecdf42f97b93d7f703b63a3361cd912a04495a33a5ac14121 \
     --hash=sha256:365395a04b0a26c309b25b7d8b1c99ef2071ec9a2b74bc8a5fd3b7a3642fe963
-    # via
-    #   -c C:/Users/ANIL/AppData/Local/Temp/claude/C--AI-Agentic-OS/6ab3d7f5-c05c-491e-ad09-289f5f59b229/scratchpad/tested2.txt
-    #   promptwise-core (pyproject.toml)
+    # via promptwise-core (pyproject.toml)
 referencing==0.37.0 \
     --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231 \
     --hash=sha256:44aefc3142c5b842538163acb373e24cce6632bd54bdb01b21ad5863489f50d8
@@ -1264,7 +1262,6 @@ sqlalchemy==2.0.49 \
     --hash=sha256:ec44cfa7ef1a728e88ad41674de50f6db8cfdb3e2af84af86e0041aaf02d43d0 \
     --hash=sha256:fb37f15714ec2652d574f021d479e78cd4eb9d04396dca36568fdfffb3487982
     # via
-    #   -c C:/Users/ANIL/AppData/Local/Temp/claude/C--AI-Agentic-OS/6ab3d7f5-c05c-491e-ad09-289f5f59b229/scratchpad/tested2.txt
     #   promptwise-core (pyproject.toml)
     #   alembic
 sse-starlette==3.5.0 \
@@ -1320,9 +1317,7 @@ tree-sitter==0.26.0 \
     --hash=sha256:f9997ba61368c48ed54e715676afadf703947a1542464e39d047764fb3624b01 \
     --hash=sha256:ff527388df14cb5009f9274faf78cc69a7393ae6acf3b04784b8acca249519c5 \
     --hash=sha256:ff80d4833d330a73184a3ac5132abe93c575d2dea31975c6f15c0d21fef238aa
-    # via
-    #   -c C:/Users/ANIL/AppData/Local/Temp/claude/C--AI-Agentic-OS/6ab3d7f5-c05c-491e-ad09-289f5f59b229/scratchpad/tested2.txt
-    #   promptwise-core (pyproject.toml)
+    # via promptwise-core (pyproject.toml)
 tree-sitter-javascript==0.25.0 \
     --hash=sha256:199d09985190852e0912da2b8d26c932159be314bc04952cf917ed0e4c633e6b \
     --hash=sha256:1b852d3aee8a36186dbcc32c798b11b4869f9b5041743b63b65c2ef793db7a54 \
@@ -1333,9 +1328,7 @@ tree-sitter-javascript==0.25.0 \
     --hash=sha256:b70f887fb269d6e58c349d683f59fa647140c410cfe2bee44a883b20ec92e3dc \
     --hash=sha256:dfcf789064c58dc13c0a4edb550acacfc6f0f280577f1e7a00de3e89fc7f8ddc \
     --hash=sha256:e5ed840f5bd4a3f0272e441d19429b26eedc257abe5574c8546da6b556865e3c
-    # via
-    #   -c C:/Users/ANIL/AppData/Local/Temp/claude/C--AI-Agentic-OS/6ab3d7f5-c05c-491e-ad09-289f5f59b229/scratchpad/tested2.txt
-    #   promptwise-core (pyproject.toml)
+    # via promptwise-core (pyproject.toml)
 tree-sitter-python==0.25.0 \
     --hash=sha256:0fbf6a3774ad7e89ee891851204c2e2c47e12b63a5edbe2e9156997731c128bb \
     --hash=sha256:14a79a47ddef72f987d5a2c122d148a812169d7484ff5c75a3db9609d419f361 \
@@ -1346,9 +1339,7 @@ tree-sitter-python==0.25.0 \
     --hash=sha256:b13e090f725f5b9c86aa455a268553c65cadf325471ad5b65cd29cac8a1a68ac \
     --hash=sha256:be71650ca2b93b6e9649e5d65c6811aad87a7614c8c1003246b303f6b150f61b \
     --hash=sha256:e6d5b5799628cc0f24691ab2a172a8e676f668fe90dc60468bee14084a35c16d
-    # via
-    #   -c C:/Users/ANIL/AppData/Local/Temp/claude/C--AI-Agentic-OS/6ab3d7f5-c05c-491e-ad09-289f5f59b229/scratchpad/tested2.txt
-    #   promptwise-core (pyproject.toml)
+    # via promptwise-core (pyproject.toml)
 tree-sitter-typescript==0.23.2 \
     --hash=sha256:05db58f70b95ef0ea126db5560f3775692f609589ed6f8dd0af84b7f19f1cbb7 \
     --hash=sha256:3cd752d70d8e5371fdac6a9a4df9d8924b63b6998d268586f7d374c9fba2a478 \
@@ -1358,15 +1349,17 @@ tree-sitter-typescript==0.23.2 \
     --hash=sha256:8d4f0f9bcb61ad7b7509d49a1565ff2cc363863644a234e1e0fe10960e55aea0 \
     --hash=sha256:c7cc1b0ff5d91bac863b0e38b1578d5505e718156c9db577c8baea2557f66de8 \
     --hash=sha256:e96d36b85bcacdeb8ff5c2618d75593ef12ebaf1b4eace3477e2bdb2abb1752c
+    # via promptwise-core (pyproject.toml)
+truststore==0.10.5 ; sys_platform != 'emscripten' \
+    --hash=sha256:30d36967ccaded5cbb38d602c433f53600036c79d502f4533a49b60a03bbefcd \
+    --hash=sha256:9aaaedaefaf06d8b206278cf8b5012bc897f485a874503501e12d776df78951c
     # via
-    #   -c C:/Users/ANIL/AppData/Local/Temp/claude/C--AI-Agentic-OS/6ab3d7f5-c05c-491e-ad09-289f5f59b229/scratchpad/tested2.txt
-    #   promptwise-core (pyproject.toml)
+    #   httpcore2
+    #   httpx2
 typer==0.27.1 \
     --hash=sha256:53150287edd11baeb4e4722c8e394fcdf8181c0ae89485cba8d25c778d5edd56 \
     --hash=sha256:a79bef8469a79c45498e7b814ecf8d603cc7644e9acbd9e19cac0334240b18df
-    # via
-    #   -c C:/Users/ANIL/AppData/Local/Temp/claude/C--AI-Agentic-OS/6ab3d7f5-c05c-491e-ad09-289f5f59b229/scratchpad/tested2.txt
-    #   promptwise-core (pyproject.toml)
+    # via promptwise-core (pyproject.toml)
 typing-extensions==4.16.0 \
     --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8 \
     --hash=sha256:dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5
@@ -1375,11 +1368,12 @@ typing-extensions==4.16.0 \
     #   anyio
     #   fastapi
     #   grpcio
+    #   httpx2
     #   mcp
+    #   mcp-types
     #   opentelemetry-api
     #   pydantic
     #   pydantic-core
-    #   pydantic-settings
     #   referencing
     #   sqlalchemy
     #   starlette
@@ -1391,7 +1385,6 @@ typing-inspection==0.4.4 \
     #   fastapi
     #   mcp
     #   pydantic
-    #   pydantic-settings
 urllib3==2.8.0 \
     --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3 \
     --hash=sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63
@@ -1400,7 +1393,6 @@ uvicorn==0.48.0 \
     --hash=sha256:48097851328b87ec36117d3d575234519eb58c2b22d79666e9bbc6c49a761dad \
     --hash=sha256:a5504207195d08c2511bf9125ede5ac4a4b71725d519e758d01dcf0bc2d31c37
     # via
-    #   -c C:/Users/ANIL/AppData/Local/Temp/claude/C--AI-Agentic-OS/6ab3d7f5-c05c-491e-ad09-289f5f59b229/scratchpad/tested2.txt
     #   promptwise-core (pyproject.toml)
     #   mcp
 uvloop==0.23.0 ; platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32' \

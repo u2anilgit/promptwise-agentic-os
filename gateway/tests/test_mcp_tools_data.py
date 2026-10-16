@@ -5,7 +5,7 @@ from gateway.mcp_server import mcp_app
 
 async def _call(name, args):
     blocks = await mcp_app.call_tool(name, args)
-    return json.loads(blocks[0].text)
+    return json.loads(blocks.content[0].text)
 
 
 async def test_query_code_index_finds_a_symbol_in_the_project(operator):

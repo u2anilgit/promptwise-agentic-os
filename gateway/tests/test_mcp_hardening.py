@@ -64,7 +64,7 @@ def test_project_verify_commands_apply_only_when_operator_allowlisted(tmp_path, 
 async def test_an_unapproved_project_test_command_cannot_forge_a_grounded_pass(operator):
     (operator / ".promptwise" / "config.yaml").write_text("verify:\n  test_command: 'python -c \"print(1)\"'\n", encoding="utf-8")
     blocks = await mcp_app.call_tool("verify_output", {"diff": "c"})
-    result = json.loads(blocks[0].text)
+    result = json.loads(blocks.content[0].text)
     assert result["grounded"] is False  # the unapproved command was ignored, not run
 
 
@@ -138,14 +138,14 @@ def test_audit_records_carry_the_callers_detail(tmp_path):
 # ---- M2 / M3 ----
 async def test_verify_output_text_is_returned_as_untrusted(operator):
     blocks = await mcp_app.call_tool("verify_output", {"diff": "c"})
-    outputs = [r["output"] for r in json.loads(blocks[0].text)["results"]]
+    outputs = [r["output"] for r in json.loads(blocks.content[0].text)["results"]]
     assert outputs and all(o.startswith("<untrusted") for o in outputs)
 
 
 async def test_unbounded_inputs_are_rejected(operator):
     too_big = await mcp_app.call_tool("query_memory", {"query": "x", "scope": "project", "limit": 100000})
-    assert "limit" in json.loads(too_big[0].text)["error"]
+    assert "limit" in json.loads(too_big.content[0].text)["error"]
     many = await mcp_app.call_tool("run_ingestion_sweep", {"session_texts": ["t"] * 500})
-    assert "session_texts" in json.loads(many[0].text)["error"]
+    assert "session_texts" in json.loads(many.content[0].text)["error"]
     huge = await mcp_app.call_tool("run_ingestion_sweep", {"session_texts": ["x" * 100000]})
-    assert "session_texts" in json.loads(huge[0].text)["error"]
+    assert "session_texts" in json.loads(huge.content[0].text)["error"]

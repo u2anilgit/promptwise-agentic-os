@@ -37,6 +37,15 @@ def test_every_direct_runtime_dependency_is_in_the_runtime_lock():
     assert wanted - locked == set()
 
 
+def test_dev_lock_is_a_superset_of_the_runtime_lock_with_identical_pins():
+    # An environment built from the dev lock must also satisfy the runtime lock (doctor's deps.integrity
+    # compares against requirements.lock). Compile the dev lock with `-c requirements.lock`.
+    runtime = {e.name: e.version for e in parse_lockfile(ROOT / "requirements.lock")}
+    dev = {e.name: e.version for e in parse_lockfile(ROOT / "requirements-dev.lock")}
+    assert set(runtime) - set(dev) == set()
+    assert {n: (runtime[n], dev[n]) for n in runtime if runtime[n] != dev[n]} == {}
+
+
 def test_litellm_is_not_a_dependency_until_a_deliberate_decision_adds_it():
     # docs/ARCHITECTURE.md "LiteLLM posture": it was compromised on PyPI (1.82.7/1.82.8, 2026-03-24).
     # Adding it requires an exact pin + hash, a sandboxed sidecar, and removing this guard on purpose.

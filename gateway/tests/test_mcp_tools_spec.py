@@ -15,7 +15,7 @@ CHECKS = [
 
 async def _call(name, args):
     blocks = await mcp_app.call_tool(name, args)
-    return json.loads(blocks[0].text)
+    return json.loads(blocks.content[0].text)
 
 
 def _project(operator, test_command='python -c "pass"', extra=""):

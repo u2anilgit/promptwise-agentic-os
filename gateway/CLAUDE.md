@@ -31,7 +31,7 @@ gateway/
 
 ## MCP Server
 
-Start standalone: `python -m gateway.mcp_server`. Claude Code (and any other MCP-capable client) auto-discovers it via the repo-root `.mcp.json` once this repo is opened as a project — no manual registration needed. It exposes 12 tools (`gateway/mcp_server.py`), each a thin adapter over a core verb: `verify_output`, `query_code_index`, `record_memory`, `query_memory`, `run_ingestion_sweep`, and the spec engine's `specify_feature`, `plan_feature`, `tasks_feature`, `complete_task`, `verify_feature`, `converge_feature`, `amend_check`. `orchestrate_tasks` is not exposed (it takes Python callables). List them with `promptwise mcp tools`.
+Built on `mcp` SDK 2.x (`MCPServer`, protocol revision 2026-07-28; the legacy `initialize` flow still negotiates for older clients). Start standalone: `python -m gateway.mcp_server` (use the project `.venv`, see `docs/MAINTENANCE.md` 2b). Claude Code (and any other MCP-capable client) auto-discovers it via the repo-root `.mcp.json` once this repo is opened as a project — no manual registration needed. It exposes 12 tools (`gateway/mcp_server.py`), each a thin adapter over a core verb: `verify_output`, `query_code_index`, `record_memory`, `query_memory`, `run_ingestion_sweep`, and the spec engine's `specify_feature`, `plan_feature`, `tasks_feature`, `complete_task`, `verify_feature`, `converge_feature`, `amend_check`. `orchestrate_tasks` is not exposed (it takes Python callables). List them with `promptwise mcp tools`.
 
 ### Governed boundary (`gateway/mcp_guard.py`)
 

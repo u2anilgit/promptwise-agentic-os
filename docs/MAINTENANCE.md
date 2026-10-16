@@ -33,11 +33,13 @@ Exit code is non-zero if any check is FAIL, so `promptwise doctor` is CI-safe (`
 
 `requirements.lock` (runtime) and `requirements-dev.lock` (runtime + dev) pin every package, including transitive ones, with sha256 hashes. They are universal for Python 3.12-3.13 (`requires-python = ">=3.12,<3.14"`). The image (`compose/gateway.Dockerfile`) and CI install only from them (`pip install --require-hashes -r requirements.lock`, `uv pip sync --require-hashes requirements-dev.lock`), so an unexpected or tampered wheel fails the install. `promptwise doctor` (`deps.integrity`) FAILs on a package listed in `security/known_bad_packages.yaml` and WARNs when the environment differs from the lock; fix a WARN with `uv pip sync --require-hashes requirements.lock`.
 
-Regenerate (uv keeps existing pins as preferences, so only intended bumps change):
+**Supported dev environment** (`pyproject.toml` requires Python 3.12-3.13; the machine default may be older): `uv venv .venv --python 3.12`, then `uv pip sync --require-hashes -p .venv/Scripts/python.exe requirements-dev.lock` and `uv pip install -p .venv/Scripts/python.exe --no-deps -e .` (use `.venv/bin/python` on Linux/macOS), and run everything with that interpreter. `promptwise doctor` reports `deps.integrity` PASS in it.
+
+Regenerate (uv keeps existing pins as preferences, so only intended bumps change). The dev lock is compiled under the runtime lock's constraints (`-c requirements.lock`) so shared packages never differ (guarded by `test_dev_lock_is_a_superset_of_the_runtime_lock_with_identical_pins`):
 
 ```
 uv pip compile pyproject.toml --universal --python-version 3.12 --generate-hashes --no-header -o requirements.lock
-uv pip compile pyproject.toml --universal --python-version 3.12 --generate-hashes --no-header --extra dev -o requirements-dev.lock
+uv pip compile pyproject.toml --universal --python-version 3.12 --generate-hashes --no-header --extra dev -c requirements.lock -o requirements-dev.lock
 # bump one package: add  --upgrade-package <name>
 ```
 
