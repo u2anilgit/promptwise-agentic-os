@@ -27,6 +27,7 @@ from core.memory.models import Fact
 from core.memory.rank import reciprocal_rank_fusion
 from core.memory.store import get_fact, open_store, save_fact, search_fts
 from core.memory.vectors import ensure_collection, search as vector_search, upsert_fact
+from core.security.untrusted import scan_for_injection
 
 
 def _qdrant_client(config: dict[str, Any]) -> QdrantClient:
@@ -76,7 +77,7 @@ def record_memory(
                         pass
             saved.append(fact)
 
-        record_audit(config, actor="record_memory", action=scope, target=root or session_id or "unscoped", result="allow", detail={"fact_count": len(saved), "pii": pii})
+        record_audit(config, actor="record_memory", action=scope, target=root or session_id or "unscoped", result="allow", detail={"fact_count": len(saved), "pii": pii, "injection_flags": scan_for_injection(text)})
         return saved
     finally:
         conn.close()

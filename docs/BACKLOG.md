@@ -294,6 +294,13 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 - [ ] Untracked `docs/IMPLEMENTATION_ANALYSIS.md` (2026-09-04, findings F-01..F-16, target architecture) and `docs/ADOPTION_AND_CAPABILITY_RESEARCH.md` (adoption planes, capability matrix) — review, then commit as the new shared reference docs; fold accepted items into ROADMAP. New items they raise beyond this file: no CI workflow, OpenAI-compat endpoint unbuilt, no identity/tenancy/secrets/approval layer, no OTel emission, no durable job queue.
 - [ ] Spec engine design + plan exist (`specs/2026-08-31-spec-engine-design.md`, `plans/2026-08-31-spec-engine.md`) but are not executed; blocked on the persistence decision above.
 
+### From Phase 3.5 build, 2026-10-16
+
+- [ ] **Generate and commit a real hash-pinned `requirements.lock`** (`uv pip compile --generate-hashes`; `uv` not installed in dev env) and decide LiteLLM posture — it is named in the locked stack but is not yet a dependency; when added, pin exact version and consider a sandboxed sidecar behind a thin provider interface. `doctor` currently WARNs `deps.integrity` (no lockfile).
+- [ ] **Persist memory provenance/trust tier** — `tag_untrusted`/`scan_for_injection` exist and `record_memory` audits flags, but facts carry no stored trust tier, source or TTL (needs a store migration — blocked on the SQLAlchemy/Alembic decision). Also wrap recalled facts with `tag_untrusted` at the MCP boundary once `query_memory` is exposed.
+- [ ] **Apply `tag_untrusted` to outbound MCP client results** when an outbound MCP client exists; same for `guard_tool` pinning of third-party servers.
+- [ ] `live_tool_spec` reads FastMCP's private `_tool_manager`; a test pins it to `list_tools()`, but replace with a public accessor if the SDK adds one.
+
 ## Resolved
 
 - [x] Pack-loader foundation itself (schema/loader/registry/CLI/doctor wiring, `intelligence` pack kind) — `docs/superpowers/plans/2026-08-24-pack-loader-foundation.md`, merged `aa9cf4a` 2026-08-24.
