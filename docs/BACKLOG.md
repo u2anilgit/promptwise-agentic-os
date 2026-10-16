@@ -274,7 +274,7 @@ found beyond what was already logged above; this batch is scope/priority finding
   risk gap for Phase 5 sub-project 2: the spec engine needs a persistence layer and no decision
   or scaffold exists yet. Decide the schema/migration approach *before* sub-project 2 starts, not
   mid-implementation.
-- [ ] **MCP tool exposure gap** — only `verify_output` and the code-index verb are wired into the
+- [x] **FIXED 2026-10-16 (branch feat/mcp-exposure; `docs/superpowers/plans/2026-10-16-mcp-exposure.md`)** — 12 tools now exposed through `gateway/mcp_guard.py`; `orchestrate_tasks` deliberately not (takes callables). Original: **MCP tool exposure gap** — only `verify_output` and the code-index verb are wired into the
   MCP server (`gateway/mcp_server.py`); `record_memory`, `query_memory`, `run_ingestion_sweep`,
   and `orchestrate_tasks` are all callable as core verbs but not yet exposed as MCP tools, despite
   each sub-project's own plan naming this as a named follow-up. Batch these into one MCP-wiring
@@ -305,7 +305,7 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 
 ### From spec-engine v2 build, 2026-10-16
 
-- [ ] MCP exposure for the six spec verbs (`specify_feature`, `plan_feature`, `tasks_feature`, `complete_task`, `verify_feature`, `converge_feature`) plus `amend_check`; `promptwise spec` CLI.
+- [x] (done on feat/mcp-exposure; `promptwise spec` CLI still open) MCP exposure for the six spec verbs (`specify_feature`, `plan_feature`, `tasks_feature`, `complete_task`, `verify_feature`, `converge_feature`) plus `amend_check`; `promptwise spec` CLI.
 - [ ] `amend_check` is audit-only; add a JIT grant requirement (`core/policy/jit.py`) so an agent cannot amend its own checks unattended.
 - [ ] One frozen check per requirement (ruling); revisit if requirements routinely need independent commands.
 - [ ] Acceptance-check commands run via `run_command` without `check_policy` (same gap as `verify_output`) — route through a governed `shell_exec` verb when it exists.
@@ -313,6 +313,14 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 - [ ] Review minors (spec-engine v2): check `files` outside `root` accepted (M2); `complete_task` commits `done` before auditing and `tasks_feature` commits stage before orchestrating (M3); already-done shortcut unaudited and skips hash re-check (M4); `complete_task`/`verify_feature` audits lack `artifact_sha256` and the tasks hash omits `depends_on`/`requirement_ids` (M5); `converge_feature` unaudited (M6); full Alembic upgrade + new engine on every verb call (M7).
 - [ ] Windows backslash paths in check commands fail closed (POSIX `shlex`); use forward slashes (review I3, deliberately not changed — would alter `verify.test_command` quoting).
 - [ ] `verify_output` runs semgrep/gitleaks on every `complete_task` (≈5s each) — consider a cheaper per-task profile.
+
+### From MCP exposure build, 2026-10-16
+
+- [ ] `verify_output`/`complete_task` run the *project's* `verify.test_command` and `lint_command` (project-controlled config = agent-writable). Needs an operator allow-list of runnable commands, or routing through a governed `shell_exec` verb.
+- [ ] Operator files (`policies/`, `tool_registry.yaml`, audit log) default to repo-relative paths an agent can write; hardened deployments must relocate them via `PROMPTWISE_OPERATOR_CONFIG` (documented in `gateway/CLAUDE.md`). Consider a doctor check that WARNs when they sit inside an allowed root.
+- [ ] No authentication on the MCP/HTTP surface; `gateway.allowed_roots` is the only caller-independent control. Identity/tenancy is a separate project.
+- [ ] `promptwise spec` CLI (specify/plan/tasks/complete/verify/converge) for humans.
+- [ ] Check the MCP server against the 2026-07-28 stateless spec revision.
 
 ## Resolved
 

@@ -124,3 +124,11 @@ def test_db_upgrade_migrates_to_head(tmp_path, monkeypatch):
     from core.db.migrate import current_revision, head_revision
 
     assert current_revision({"database": {"url": f"sqlite:///{(tmp_path / 'cli.db').as_posix()}"}}) == head_revision()
+
+
+def test_mcp_tools_lists_every_live_tool_with_its_pin_status():
+    result = runner.invoke(app, ["mcp", "tools"])
+    assert result.exit_code == 0
+    for name in ("verify_output", "query_memory", "complete_task", "amend_check"):
+        assert f"{name} - pinned" in result.stdout
+    assert "UNPINNED" not in result.stdout and "MISMATCH" not in result.stdout

@@ -47,6 +47,34 @@ def pin_tools() -> None:
     typer.echo(f"pinned {len(pinned)} tool(s): {', '.join(pinned) or 'none'}")
 
 
+mcp_cli = typer.Typer(help="Inspect the MCP tool surface")
+app.add_typer(mcp_cli, name="mcp")
+
+
+@mcp_cli.command("tools")
+def mcp_tools() -> None:
+    """List every live MCP tool with its registry/pin status (read-only, no audit writes)."""
+    from core.config.resolve import resolve_config_auto
+    from core.policy.tool_pins import tool_description_hash
+    from core.policy.tool_registry import load_tool_registry
+    from gateway.mcp_server import live_tool_specs
+
+    registry = load_tool_registry(resolve_config_auto())
+    for name, (description, schema) in live_tool_specs().items():
+        entry = registry.get(name)
+        if entry is None:
+            status = "UNREGISTERED"
+        elif not entry.enabled:
+            status = "DISABLED"
+        elif entry.description_sha256 is None:
+            status = "UNPINNED"
+        elif entry.description_sha256 != tool_description_hash(description, schema):
+            status = "MISMATCH (re-pin with `promptwise pin-tools`)"
+        else:
+            status = "pinned"
+        typer.echo(f"{name} - {status}")
+
+
 db_app = typer.Typer(help="Database schema management")
 app.add_typer(db_app, name="db")
 
