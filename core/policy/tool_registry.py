@@ -3,8 +3,8 @@ registry (closes the P2/P7 gap in the research doc's language). An
 unregistered or explicitly-disabled tool is rejected before it ever
 reaches core logic — this is the enforcement boundary gateway/CLAUDE.md
 describes ("MCP tool registry enforcement happens here at the boundary").
-Version-pinning by hash is a Phase 8 (pack ecosystem) concern; this phase
-ships name+version+enabled, the minimum needed for a real kill switch.
+Entries carry name+version+enabled (the kill switch) and an optional
+description_sha256 pin enforced by core/policy/tool_pins.py.
 """
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from core.config.resolve import resolve_path
 class ToolRegistryEntry(BaseModel):
     version: str
     enabled: bool
+    description_sha256: str | None = None  # see core/policy/tool_pins.py
 
 
 def _registry_path(config: dict[str, Any]) -> Path:

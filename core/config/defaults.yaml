@@ -19,6 +19,7 @@ paths:
 security:
   known_bad_packages_path: security/known_bad_packages.yaml
   lockfile_path: requirements.lock
+  require_tool_pins: false
 audit:
   log_path: .promptwise/agentic_audit.jsonl
 memory:

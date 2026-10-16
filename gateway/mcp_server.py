@@ -19,6 +19,17 @@ from core.verify.gate import verify_output as _verify_output
 mcp_app = FastMCP("promptwise-agentic-os")
 
 
+def live_tool_spec(name: str) -> tuple[str, dict]:
+    """The description + input schema exactly as served to MCP clients
+    (what the model reads) — the input to tool-description pinning."""
+    tool = mcp_app._tool_manager.get_tool(name)  # noqa: SLF001 — SDK exposes no sync public accessor
+    return tool.description, tool.parameters
+
+
+def live_tool_specs() -> dict[str, tuple[str, dict]]:
+    return {t.name: (t.description, t.parameters) for t in mcp_app._tool_manager.list_tools()}  # noqa: SLF001
+
+
 @mcp_app.tool()
 def verify_output(diff: str, spec: str = "", cwd: str = "", ledger_key: str = "") -> dict:
     """Run the verification gate (tests, lint, Semgrep, Gitleaks) against
@@ -40,11 +51,13 @@ def verify_output(diff: str, spec: str = "", cwd: str = "", ledger_key: str = ""
     from pathlib import Path
 
     from core.config.resolve import resolve_config_auto
-    from core.policy.tool_registry import is_tool_allowed
+    from core.policy.tool_pins import guard_tool
 
     config = resolve_config_auto()
-    if not is_tool_allowed(config, "verify_output"):
-        return {"error": "tool 'verify_output' is not enabled in the tool registry (tool_registry.yaml) — rejected at the boundary"}
+    description, schema = live_tool_spec("verify_output")
+    decision = guard_tool(config, "verify_output", description, schema)
+    if not decision.allowed:
+        return {"error": f"{decision.reason} (tool_registry.yaml) — rejected at the boundary"}
 
     result = _verify_output(
         diff=diff,

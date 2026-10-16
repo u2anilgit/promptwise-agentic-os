@@ -35,6 +35,18 @@ def profile(out: Path = DEFAULT_PROFILE_PATH) -> None:
     typer.echo(f"wrote {out} — {detected.total_ram_gb}GB total RAM, {detected.cpu_count} CPUs, GPU={detected.has_gpu}")
 
 
+@app.command("pin-tools")
+def pin_tools() -> None:
+    """Pin the current MCP tool descriptions/schemas in tool_registry.yaml.
+    Review the tool text first — a later change to it will be denied until re-pinned."""
+    from core.config.resolve import resolve_config_auto
+    from core.policy.tool_pins import write_pins
+    from gateway.mcp_server import live_tool_specs
+
+    pinned = write_pins(resolve_config_auto(), live_tool_specs())
+    typer.echo(f"pinned {len(pinned)} tool(s): {', '.join(pinned) or 'none'}")
+
+
 pack_app = typer.Typer(help="Manage installed packs (docs/ARCHITECTURE.md §3)")
 app.add_typer(pack_app, name="pack")
 

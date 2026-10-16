@@ -52,3 +52,27 @@ async def test_verify_output_tool_is_registered_in_the_tool_registry():
         registry = yaml.safe_load(f)
     assert "verify_output" in registry["tools"]
     assert registry["tools"]["verify_output"]["enabled"] is True
+
+
+async def test_live_tool_spec_matches_what_clients_are_served():
+    """Pins are computed from live_tool_spec(); it must equal the
+    description/schema list_tools serves, or pinning guards the wrong text."""
+    from gateway.mcp_server import live_tool_spec
+
+    served = {t.name: t for t in await mcp_app.list_tools()}["verify_output"]
+    description, schema = live_tool_spec("verify_output")
+    assert description == served.description
+    assert schema == served.inputSchema
+
+
+async def test_verify_output_is_rejected_when_its_pinned_description_changed(tmp_path, monkeypatch):
+    from gateway import mcp_server
+
+    registry = tmp_path / "tool_registry.yaml"
+    registry.write_text("tools:\n  verify_output:\n    version: '0.1.0'\n    enabled: true\n    description_sha256: 'deadbeef'\n", encoding="utf-8")
+    (tmp_path / ".promptwise").mkdir()
+    (tmp_path / ".promptwise" / "config.yaml").write_text(f"policy:\n  tool_registry_path: {registry.as_posix()}\naudit:\n  log_path: {(tmp_path / 'a.jsonl').as_posix()}\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    content = await mcp_server.mcp_app.call_tool("verify_output", {"diff": "x", "cwd": str(tmp_path)})
+    assert "changed since it was pinned" in json.loads(content[0].text)["error"]
