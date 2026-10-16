@@ -286,6 +286,14 @@ found beyond what was already logged above; this batch is scope/priority finding
   above; (3) Phase 5 sub-project 2 (spec engine) itself; (4) Phase 6 dashboard; (5) Phase 8 pack
   content, now that Phases 4-5's dependencies are solid.
 
+### From status check, 2026-10-16
+
+Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (292/4) is stale.
+
+- [x] **FIXED 2026-10-16** (default core audit log is now `.promptwise/agentic_audit.jsonl`; regression tests added; runtime state gitignored; suite 294 passed/4 skipped). Gap analysis: `docs/research/2026-10-16-agent-landscape-gap-analysis.md`. Original finding: **P0 — `audit.chain` doctor check FAILs on this dev repo** (`core/tests/diagnostics/test_checks.py::test_audit_chain_check_passes_by_default`, `::test_no_failures_means_clean_exit`, `scripts/tests/test_cli.py::test_doctor_exits_zero_when_no_failures`). Cause: the PromptWise *Claude Code plugin* hooks write their own-schema records (`agent`, `rules_applied`, `posttooluse_audit`…) into the same `.promptwise/audit.jsonl` Agentic OS uses; `verify_chain` fails at index 0. Real namespace collision, not tampering. Fix options: separate audit path for the core (e.g. `.promptwise/core/audit.jsonl`), and make tests use a tmp path rather than the process cwd. Also add `.promptwise/` to `.gitignore` (currently untracked noise).
+- [ ] Untracked `docs/IMPLEMENTATION_ANALYSIS.md` (2026-09-04, findings F-01..F-16, target architecture) and `docs/ADOPTION_AND_CAPABILITY_RESEARCH.md` (adoption planes, capability matrix) — review, then commit as the new shared reference docs; fold accepted items into ROADMAP. New items they raise beyond this file: no CI workflow, OpenAI-compat endpoint unbuilt, no identity/tenancy/secrets/approval layer, no OTel emission, no durable job queue.
+- [ ] Spec engine design + plan exist (`specs/2026-08-31-spec-engine-design.md`, `plans/2026-08-31-spec-engine.md`) but are not executed; blocked on the persistence decision above.
+
 ## Resolved
 
 - [x] Pack-loader foundation itself (schema/loader/registry/CLI/doctor wiring, `intelligence` pack kind) — `docs/superpowers/plans/2026-08-24-pack-loader-foundation.md`, merged `aa9cf4a` 2026-08-24.
