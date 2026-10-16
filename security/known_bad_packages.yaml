@@ -1,0 +1,8 @@
+# Known-bad package versions. `promptwise doctor` (deps.integrity) FAILs if
+# any entry is installed. Add entries here (or point
+# security.known_bad_packages_path at an org-maintained file) — no code change.
+packages:
+  - package: litellm
+    versions: ["1.82.7", "1.82.8"]
+    reason: malicious PyPI releases (credential-harvesting), live ~40 min on 2026-03-24 via a poisoned CI step
+    reference: https://docs.litellm.ai/blog/security-update-march-2026

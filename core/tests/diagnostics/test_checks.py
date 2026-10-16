@@ -14,6 +14,7 @@ def test_run_diagnostics_returns_all_check_names():
         "policy.load",
         "audit.chain",
         "services.gateway",
+        "deps.integrity",
     }
 
 

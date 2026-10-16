@@ -126,6 +126,12 @@ def _check_audit_chain(config: dict | None = None) -> CheckResult:
     )
 
 
+def _check_deps_integrity(config: dict) -> CheckResult:
+    from core.security.supply_chain import check_dependencies
+
+    return check_dependencies(config)
+
+
 def run_diagnostics(config: dict | None = None) -> list[CheckResult]:
     config = config if config is not None else resolve_config_auto()
     return [
@@ -137,4 +143,5 @@ def run_diagnostics(config: dict | None = None) -> list[CheckResult]:
         _check_policy_load(config),
         _check_audit_chain(config),
         _check_services_gateway(config),
+        _check_deps_integrity(config),
     ]

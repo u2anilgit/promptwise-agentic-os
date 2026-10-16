@@ -25,6 +25,7 @@ CLI + core verb `run_diagnostics()`. Runs a fixed set of core checks, then disco
 | `policy.load` | all policy-as-code files in `policies/` + installed packs parse | shows the file + line that fails to parse |
 | `packs.integrity` | every installed pack's `pack.yaml` validates, `requires_core` range satisfied | names the pack and the failing constraint |
 | `audit.chain` | hash chain of the audit log is unbroken | flags the first broken link, does not auto-repair |
+| `deps.integrity` | no installed package is on `security/known_bad_packages.yaml` (FAIL); `requirements.lock` exists, is hash-pinned and matches installed versions (WARN) | "litellm==1.82.8 (malicious release) — uninstall and rotate credentials"; "no lockfile — generate with `uv pip compile --generate-hashes`" |
 
 Exit code is non-zero if any check is FAIL, so `promptwise doctor` is CI-safe (`compose/` bundle runs it as a healthcheck).
 

@@ -15,6 +15,7 @@ dependencies = [
     "tree-sitter-typescript>=0.23",
     "tree-sitter-javascript>=0.25",
     "qdrant-client>=1.19,<2",
+    "packaging>=24",
 ]
 
 [project.optional-dependencies]
