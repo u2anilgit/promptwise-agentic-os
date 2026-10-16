@@ -16,11 +16,12 @@ core/
   audit/           record_audit, hash-chain, verification              (Phase 3)
   memory/          query_memory, rank_context, hybrid retrieval        (Phase 4)
   verify/          verify_output, failure ledger                       (Phase 2)
-  spec/            spec engine (specify/plan/tasks/implement/verify)   (Phase 5)
+  spec/            spec engine: specify/plan/tasks(freeze)/complete_task/verify/converge   (Phase 5, done)
   packs/           pack loader, manifest validation, capability grant  (Phase 8)
   diagnostics/     run_diagnostics, generate_support_bundle, redact.py (Phase 0/3)
-  models/          SQLAlchemy 2.0 models (Postgres-clean from day one)
-  migrations/      Alembic
+  db/              SQLAlchemy 2.0 Base/engine/session_scope, programmatic Alembic (new durable state only)
+  security/        supply_chain (deny-list + lockfile), untrusted-content tagging
+  migrations/      Alembic revisions (0001 baseline, 0002 spec engine)
 ```
 
 ## Conventions

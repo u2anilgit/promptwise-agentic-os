@@ -35,6 +35,7 @@ from core.verify.runners import run_command
 from core.spec.models import (
     AcceptanceCheck,
     Complexity,
+    ConvergeReport,
     EarsViolation,
     FrozenCheck,
     PlanArtifact,
@@ -335,3 +336,73 @@ def amend_check(
         "old_hashes": old.file_hashes, "new_hashes": new.file_hashes,
     })
     return new
+
+
+class VerifyFeatureResult(BaseModel):
+    spec_id: str
+    verified: bool
+    outstanding: list[str]
+    uncovered_requirements: list[str]
+
+
+def verify_feature(spec_id: str, config: dict[str, Any] | None = None, root: Path | None = None) -> VerifyFeatureResult:
+    config = _prepare(config, root)
+    with session_scope(config, root) as session:
+        spec = _require_stage(session, spec_id, ("tasked", "implementing", "verified"), "verify_feature")
+        tasks = store.get_tasks(session, spec_id)
+        outstanding = [t.task_id for t in tasks if t.status != "done"]
+        covered = {rid for t in tasks if t.status == "done" for rid in t.requirement_ids}
+        uncovered = [r.id for r in spec.requirements if r.id not in covered]
+        verified = not outstanding and not uncovered
+        if verified:
+            store.set_stage(session, spec_id, "verified")
+    _audit(
+        config, "verify_feature", spec_id,
+        {"verified": verified, "outstanding": outstanding, "uncovered_requirements": uncovered},
+        result="allow" if verified else "deny",
+    )
+    return VerifyFeatureResult(spec_id=spec_id, verified=verified, outstanding=outstanding, uncovered_requirements=uncovered)
+
+
+def _missing_symbols(symbols: list[str], root: Path, config: dict[str, Any]) -> list[str]:
+    from core.index.query import query_code_index
+
+    missing = []
+    for name in symbols:
+        # query_code_index matches by substring; the engine needs an exact definition.
+        if not any(loc.symbol == name for loc in query_code_index(name, root=root, config=config)):
+            missing.append(name)
+    return missing
+
+
+def converge_feature(spec_id: str, config: dict[str, Any] | None = None, root: Path | None = None) -> ConvergeReport:
+    """Read-only drift report: compares hashes and symbols, never re-runs checks."""
+    config = _prepare(config, root)
+    base = Path(root) if root else Path.cwd()
+    with session_scope(config, root) as session:
+        spec = _require_stage(session, spec_id, ("tasked", "implementing", "verified"), "converge_feature")
+        plan = store.get_plan(session, spec_id)
+        tasks = store.get_tasks(session, spec_id)
+        frozen = store.get_frozen_checks(session, spec_id)
+
+    reasons: list[str] = []
+    if plan is not None and plan.requirements_sha256 != requirements_hash(spec.requirements):
+        reasons.append("requirements_changed")
+    for check in frozen:
+        for f, frozen_hash in check.file_hashes.items():
+            path = base / f
+            if not path.is_file():
+                reasons.append(f"check_file_missing:{f}")
+            elif file_sha256(path) != frozen_hash:
+                reasons.append(f"check_file_changed:{f}")
+    task_covered = {rid for t in tasks for rid in t.requirement_ids}
+    reasons += [f"requirement_uncovered:{r.id}" for r in spec.requirements if r.id not in task_covered]
+    symbols = sorted({s for t in tasks for s in t.expected_symbols})
+    if symbols:
+        reasons += [f"symbol_missing:{s}" for s in _missing_symbols(symbols, base, config)]
+
+    done = sum(1 for t in tasks if t.status == "done")
+    return ConvergeReport(
+        spec_id=spec_id, planned_tasks=len(tasks), done_tasks=done, pending_tasks=len(tasks) - done,
+        stale=bool(reasons), reasons=reasons,
+    )

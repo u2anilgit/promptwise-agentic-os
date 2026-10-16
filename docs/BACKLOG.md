@@ -303,6 +303,15 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 - [ ] **Apply `tag_untrusted` to outbound MCP client results** when an outbound MCP client exists; same for `guard_tool` pinning of third-party servers.
 - [ ] `live_tool_spec` reads FastMCP's private `_tool_manager`; a test pins it to `list_tools()`, but replace with a public accessor if the SDK adds one.
 
+### From spec-engine v2 build, 2026-10-16
+
+- [ ] MCP exposure for the six spec verbs (`specify_feature`, `plan_feature`, `tasks_feature`, `complete_task`, `verify_feature`, `converge_feature`) plus `amend_check`; `promptwise spec` CLI.
+- [ ] `amend_check` is audit-only; add a JIT grant requirement (`core/policy/jit.py`) so an agent cannot amend its own checks unattended.
+- [ ] One frozen check per requirement (ruling); revisit if requirements routinely need independent commands.
+- [ ] Acceptance-check commands run via `run_command` without `check_policy` (same gap as `verify_output`) — route through a governed `shell_exec` verb when it exists.
+- [ ] Migrate `core/memory`, `core/index` and JSON stores onto `core/db` opportunistically (memory first, when provenance/trust tier columns are needed).
+- [ ] `verify_output` runs semgrep/gitleaks on every `complete_task` (≈5s each) — consider a cheaper per-task profile.
+
 ## Resolved
 
 - [x] Pack-loader foundation itself (schema/loader/registry/CLI/doctor wiring, `intelligence` pack kind) — `docs/superpowers/plans/2026-08-24-pack-loader-foundation.md`, merged `aa9cf4a` 2026-08-24.
