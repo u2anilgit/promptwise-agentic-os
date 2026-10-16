@@ -58,6 +58,16 @@ class EarsViolation(BaseModel):
     reason: str
 
 
+class TaskRecord(BaseModel):
+    task_id: str
+    status: TaskStatus
+    requirement_ids: list[str]
+    depends_on: list[str]
+    expected_symbols: list[str]
+    interactive: bool
+    error: str | None = None
+
+
 class ConvergeReport(BaseModel):
     spec_id: str
     planned_tasks: int

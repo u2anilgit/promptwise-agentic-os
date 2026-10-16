@@ -1,6 +1,7 @@
 # core/migrations/env.py — online migrations only, engine supplied by core.db.migrate.
 from alembic import context
 
+import core.spec.tables  # noqa: F401 — register tables on Base.metadata
 from core.db.base import Base
 
 target_metadata = Base.metadata
