@@ -310,6 +310,8 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 - [ ] One frozen check per requirement (ruling); revisit if requirements routinely need independent commands.
 - [ ] Acceptance-check commands run via `run_command` without `check_policy` (same gap as `verify_output`) — route through a governed `shell_exec` verb when it exists.
 - [ ] Migrate `core/memory`, `core/index` and JSON stores onto `core/db` opportunistically (memory first, when provenance/trust tier columns are needed).
+- [ ] Review minors (spec-engine v2): check `files` outside `root` accepted (M2); `complete_task` commits `done` before auditing and `tasks_feature` commits stage before orchestrating (M3); already-done shortcut unaudited and skips hash re-check (M4); `complete_task`/`verify_feature` audits lack `artifact_sha256` and the tasks hash omits `depends_on`/`requirement_ids` (M5); `converge_feature` unaudited (M6); full Alembic upgrade + new engine on every verb call (M7).
+- [ ] Windows backslash paths in check commands fail closed (POSIX `shlex`); use forward slashes (review I3, deliberately not changed — would alter `verify.test_command` quoting).
 - [ ] `verify_output` runs semgrep/gitleaks on every `complete_task` (≈5s each) — consider a cheaper per-task profile.
 
 ## Resolved

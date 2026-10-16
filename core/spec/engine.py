@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shlex
 import time
 import uuid
 from pathlib import Path
@@ -24,6 +25,7 @@ from core.audit.log import record_audit
 from core.config.resolve import resolve_config_auto
 from core.db.base import session_scope
 from core.db.migrate import migrate_to_head
+from core.policy.engine import check_policy
 from core.orchestrate.graph import topological_order
 from core.orchestrate.models import Dag, DagNode, DagResult
 from core.orchestrate.runner import orchestrate_tasks
@@ -139,6 +141,8 @@ def _validate_tasks(spec: SpecArtifact, tasks: list[TaskNode]) -> None:
         raise ValueError("duplicate task id in tasks")
     req_ids = {r.id for r in spec.requirements}
     for t in tasks:
+        if not t.requirement_ids:
+            raise ValueError(f"task '{t.id}' must reference at least one requirement (it would have no acceptance check)")
         for rid in t.requirement_ids:
             if rid not in req_ids:
                 raise ValueError(f"task '{t.id}' references unknown requirement '{rid}'")
@@ -155,7 +159,29 @@ def _validate_tasks(spec: SpecArtifact, tasks: list[TaskNode]) -> None:
     topological_order(Dag(name=spec.spec_id, nodes=[DagNode(id=t.id, run=t.run or noop, depends_on=t.depends_on) for t in tasks]))
 
 
-def _freeze_checks(spec: SpecArtifact, checks: list[AcceptanceCheck], base: Path) -> list[FrozenCheck]:
+def _validate_check_command(check: AcceptanceCheck, config: dict[str, Any]) -> None:
+    rid = check.requirement_id
+    if not check.command.strip():
+        raise ValueError(f"acceptance check for requirement '{rid}' has an empty command")
+    try:
+        shlex.split(check.command)
+    except ValueError as exc:
+        raise ValueError(f"acceptance check for requirement '{rid}': could not parse command - {exc}") from exc
+    if not check.files and not _spec_setting(config, "allow_fileless_checks", False):
+        raise ValueError(
+            f"acceptance check for requirement '{rid}' must name at least one file "
+            "(otherwise it can be edited unnoticed); set spec.allow_fileless_checks to override"
+        )
+
+
+def _unreferenced_check_files(checks: list[AcceptanceCheck]) -> list[str]:
+    def norm(text: str) -> str:
+        return text.replace(chr(92), "/")
+
+    return [c.requirement_id for c in checks if c.files and not any(norm(f) in norm(c.command) for f in c.files)]
+
+
+def _freeze_checks(spec: SpecArtifact, checks: list[AcceptanceCheck], base: Path, config: dict[str, Any]) -> list[FrozenCheck]:
     seen: set[str] = set()
     for c in checks:
         if c.requirement_id in seen:
@@ -169,6 +195,7 @@ def _freeze_checks(spec: SpecArtifact, checks: list[AcceptanceCheck], base: Path
 
     frozen: list[FrozenCheck] = []
     for c in checks:
+        _validate_check_command(c, config)
         hashes: dict[str, str] = {}
         for f in c.files:
             path = base / f
@@ -202,7 +229,7 @@ def tasks_feature(
             tasks = [TaskNode(id="T1", requirement_ids=[r.id for r in spec.requirements])]
 
         _validate_tasks(spec, tasks)
-        frozen = _freeze_checks(spec, checks, base)
+        frozen = _freeze_checks(spec, checks, base, config)
 
         if stage == "specified":  # trivial path: auto-plan
             store.save_plan(session, PlanArtifact(spec_id=spec_id, approach="(trivial: auto-planned)", created_at=time.time(), requirements_sha256=requirements_hash(spec.requirements)))
@@ -225,6 +252,7 @@ def tasks_feature(
     _audit(config, "tasks", spec_id, {
         "artifact_sha256": _sha({"tasks": [t.id for t in tasks], "checks": [c.model_dump() for c in frozen]}),
         "task_count": len(tasks),
+        "unreferenced_check_files": _unreferenced_check_files(checks),
     })
     return TasksResult(spec_id=spec_id, frozen=frozen, automated=automated)
 
@@ -244,6 +272,15 @@ def _unchanged(base: Path, check: FrozenCheck) -> list[str]:
         if not path.is_file() or file_sha256(path) != frozen_hash:
             changed.append(f)
     return changed
+
+
+def _command_action(command: str) -> str:
+    try:
+        argv0 = shlex.split(command)[0]
+    except (ValueError, IndexError):
+        return "shell:run:"
+    name = Path(argv0).name
+    return f"shell:run:{name[:-4] if name.lower().endswith('.exe') else name}"
 
 
 def complete_task(
@@ -269,25 +306,36 @@ def complete_task(
     if task.status == "done":
         return CompletionResult(task_id=task_id, accepted=True, status="done")
 
-    def reject(reasons: list[str], verify: VerifyResult | None = None) -> CompletionResult:
-        _audit(config, "complete_task", spec_id, {"task_id": task_id, "reasons": reasons}, result="deny")
+    def reject(reasons: list[str], verify: VerifyResult | None = None, extra: dict[str, Any] | None = None) -> CompletionResult:
+        _audit(config, "complete_task", spec_id, {"task_id": task_id, "reasons": reasons, **(extra or {})}, result="deny")
         return CompletionResult(task_id=task_id, accepted=False, status=task.status, reasons=reasons, verify=verify)
 
     if any(records[d].status != "done" for d in task.depends_on if d in records):
         return reject(["dependency_not_done"])
 
     task_checks = [frozen[rid] for rid in task.requirement_ids if rid in frozen]
+    if not task_checks:
+        return reject(["no_acceptance_check"])
 
     modified = [f"acceptance_check_modified:{f}" for c in task_checks for f in _unchanged(base, c)]
     if modified:
         return reject(modified)
 
+    if _spec_setting(config, "enforce_command_policy", True):
+        denied: dict[str, str] = {}
+        for c in task_checks:
+            action = _command_action(c.command)
+            if not check_policy(action, config).allowed:
+                denied[c.requirement_id] = action
+        if denied:
+            return reject([f"policy_denied:{rid}" for rid in denied], extra={"denied_actions": sorted(set(denied.values()))})
+
     timeout = int(_spec_setting(config, "check_timeout_seconds", 300))
-    failed = [
-        f"acceptance_check_failed:{c.requirement_id}"
-        for c in task_checks
-        if not run_command(f"acceptance_check:{c.requirement_id}", c.command, base, timeout=timeout).passed
-    ]
+    failed = []
+    for c in task_checks:
+        outcome = run_command(f"acceptance_check:{c.requirement_id}", c.command, base, timeout=timeout)
+        if not (outcome.ran and outcome.passed):  # ran=False is a vacuous pass, never a pass
+            failed.append(f"acceptance_check_failed:{c.requirement_id}")
     if failed:
         return reject(failed)
 
@@ -318,6 +366,7 @@ def amend_check(
         raise ValueError("amend_check requires a non-empty reason")
     if new_check.requirement_id != requirement_id:
         raise ValueError(f"new_check.requirement_id '{new_check.requirement_id}' does not match requirement '{requirement_id}'")
+    _validate_check_command(new_check, config)
 
     hashes: dict[str, str] = {}
     for f in new_check.files:
@@ -330,7 +379,14 @@ def amend_check(
     with session_scope(config, root) as session:
         _require_stage(session, spec_id, ("tasked", "implementing", "verified"), "amend_check")
         old = store.replace_frozen_check(session, spec_id, requirement_id, new)
+        # Work that relied on the old check is no longer proven: reopen it.
+        reset = [t.task_id for t in store.get_tasks(session, spec_id) if t.status == "done" and requirement_id in t.requirement_ids]
+        for reopened in reset:
+            store.set_task_status(session, spec_id, reopened, "pending")
+        if store.get_stage(session, spec_id) == "verified":
+            store.set_stage(session, spec_id, "implementing")
     _audit(config, "amend_check", spec_id, {
+        "tasks_reset": reset,
         "requirement_id": requirement_id, "reason": reason,
         "old_command": old.command, "new_command": new.command,
         "old_hashes": old.file_hashes, "new_hashes": new.file_hashes,

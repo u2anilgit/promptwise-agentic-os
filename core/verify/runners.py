@@ -32,6 +32,8 @@ def run_command(
         return ToolRunResult(
             tool=tool_name, ran=True, passed=proc.returncode == 0, output=truncate_output(output.strip(), max_output_chars)
         )
+    except ValueError as exc:  # shlex: e.g. unclosed quote - a handled state, not an exception
+        return ToolRunResult(tool=tool_name, ran=True, passed=False, output=f"{tool_name}: could not parse command - {exc}")
     except FileNotFoundError as exc:
         return ToolRunResult(tool=tool_name, ran=True, passed=False, output=f"{tool_name}: executable not found — {exc}")
     except subprocess.TimeoutExpired:

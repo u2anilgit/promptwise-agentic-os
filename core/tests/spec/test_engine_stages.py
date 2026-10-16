@@ -115,8 +115,8 @@ def test_cycle_is_rejected_before_anything_runs(project):
     spec = _planned(project)
     ran = []
     tasks = [
-        TaskNode(id="a", depends_on=["b"], run=lambda i: ran.append("a")),
-        TaskNode(id="b", depends_on=["a"], run=lambda i: ran.append("b")),
+        TaskNode(id="a", requirement_ids=["R1", "R2"], depends_on=["b"], run=lambda i: ran.append("a")),
+        TaskNode(id="b", requirement_ids=["R1"], depends_on=["a"], run=lambda i: ran.append("b")),
     ]
     with pytest.raises(ValueError, match="cycle"):
         tasks_feature(spec.spec_id, tasks, checks(*STANDARD_CHECKS), config=config, root=tmp)
@@ -126,7 +126,7 @@ def test_cycle_is_rejected_before_anything_runs(project):
 def test_callable_task_may_not_depend_on_an_interactive_task(project):
     tmp, config = project
     spec = _planned(project)
-    tasks = [TaskNode(id="t1"), TaskNode(id="t2", depends_on=["t1"], run=lambda i: 1)]
+    tasks = [TaskNode(id="t1", requirement_ids=["R1"]), TaskNode(id="t2", requirement_ids=["R2"], depends_on=["t1"], run=lambda i: 1)]
     with pytest.raises(ValueError, match="interactive"):
         tasks_feature(spec.spec_id, tasks, checks(*STANDARD_CHECKS), config=config, root=tmp)
 

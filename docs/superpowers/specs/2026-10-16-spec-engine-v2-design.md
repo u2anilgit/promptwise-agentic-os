@@ -77,3 +77,13 @@ core/diagnostics/   db.schema check
 ## Out of scope
 
 Mutation testing / second-model verifier; migrating existing stores; Postgres CI matrix; dashboard views of specs.
+
+## Amendments from the whole-branch review (2026-10-16)
+
+- A check with a blank or unparsable command is rejected at freeze/amend; `ran=False` is never a pass (vacuous-pass hole at the check layer).
+- Every task must reference at least one requirement, so no task can reach `done` with zero checks.
+- Every check must name at least one file unless `spec.allow_fileless_checks`; the `tasks` audit entry lists requirements whose command does not mention any listed file (`unreferenced_check_files`).
+- `amend_check` reopens done tasks linked to the requirement and drops a `verified` spec back to `implementing`.
+- Acceptance-check commands are policy-gated as `shell:run:<program>` (default-deny; `spec.enforce_command_policy`, default true) and rejections are audited with `denied_actions`.
+- A database revision newer than the code raises a clear `ValueError` from every verb.
+- Known limit: Windows backslash paths in check commands fail closed under POSIX `shlex`; use forward slashes.

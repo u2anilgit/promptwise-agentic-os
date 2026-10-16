@@ -3,3 +3,12 @@
 # explicitly allows it. This is intentional — see policy.default_effect
 # in core/config/defaults.yaml.
 rules: []
+
+# The spec engine (core/spec) policy-gates every acceptance-check command as
+# `shell:run:<program>` before running it. To let it run, e.g., python and pytest:
+#
+# rules:
+#   - action: "shell:run:python"
+#     effect: allow
+#   - action: "shell:run:pytest"
+#     effect: allow

@@ -58,7 +58,7 @@ def test_verify_feature_lists_outstanding_tasks_and_does_not_raise(project):
 
 def test_verify_feature_reports_requirements_no_done_task_covers(project):
     tmp, config = project
-    spec_id = _tasked(project, tasks=[TaskNode(id="t1", requirement_ids=["R1"]), TaskNode(id="t2")])
+    spec_id = _tasked(project, tasks=[TaskNode(id="t1", requirement_ids=["R1"]), TaskNode(id="t2", requirement_ids=["R1"])])
     _complete_all(project, spec_id)
     result = verify_feature(spec_id, config=config, root=tmp)
     assert not result.verified and result.uncovered_requirements == ["R2"]

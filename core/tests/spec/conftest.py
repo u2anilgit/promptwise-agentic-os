@@ -12,7 +12,12 @@ def project(tmp_path):
     """A tiny real project: two check scripts that exit 0, a DB, an audit log."""
     (tmp_path / "check_login.py").write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
     (tmp_path / "check_logout.py").write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
+    (tmp_path / "policies").mkdir()
+    (tmp_path / "policies" / "allow.yaml").write_text(
+        "rules:\n  - action: 'shell:run:python'\n    effect: allow\n", encoding="utf-8"
+    )
     config = {
+        "paths": {"policies_dir": str(tmp_path / "policies")},
         "engine": {"local_only": True},
         "routing": {"default_tier": "local-small"},
         "database": {"url": f"sqlite:///{(tmp_path / 'spec.db').as_posix()}"},
