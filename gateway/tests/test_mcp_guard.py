@@ -4,7 +4,7 @@ import os
 import pytest
 
 from core.policy.tool_pins import tool_description_hash
-from gateway.mcp_guard import allowed_roots, confine, effective_config, run_governed
+from gateway.mcp_guard import allowed_roots, confine, effective_config, operator_config, run_governed
 
 DESC, SCHEMA = "Demo tool", {"type": "object"}
 
@@ -97,7 +97,7 @@ def test_governed_runs_the_body_and_audits_the_call(tmp_path):
         seen["root"] = call.root
         return {"ok": True}
 
-    result = run_governed("demo", {"root": ""}, body, spec_lookup=_lookup, operator_config=op)
+    result = run_governed("demo", {"root": ""}, body, spec_lookup=_lookup, operator_config_override=op)
     assert result == {"ok": True}
     assert seen["root"] == (tmp_path / "work").resolve()
     entry = _audit(tmp_path)[-1]
@@ -107,9 +107,9 @@ def test_governed_runs_the_body_and_audits_the_call(tmp_path):
 def test_governed_denies_unregistered_disabled_and_mismatched_pin(tmp_path):
     called = []
     body = lambda call: called.append(1) or {}  # noqa: E731
-    assert "error" in run_governed("ghost", {}, body, spec_lookup=_lookup, operator_config=_operator(tmp_path))
-    assert "error" in run_governed("demo", {}, body, spec_lookup=_lookup, operator_config=_operator(tmp_path, enabled=False))
-    stale = run_governed("demo", {}, body, spec_lookup=lambda n: ("Edited text", SCHEMA), operator_config=_operator(tmp_path))
+    assert "error" in run_governed("ghost", {}, body, spec_lookup=_lookup, operator_config_override=_operator(tmp_path))
+    assert "error" in run_governed("demo", {}, body, spec_lookup=_lookup, operator_config_override=_operator(tmp_path, enabled=False))
+    stale = run_governed("demo", {}, body, spec_lookup=lambda n: ("Edited text", SCHEMA), operator_config_override=_operator(tmp_path))
     assert "changed since it was pinned" in stale["error"]
     assert called == []
 
@@ -117,7 +117,7 @@ def test_governed_denies_unregistered_disabled_and_mismatched_pin(tmp_path):
 def test_governed_denied_root_is_audited_and_the_body_never_runs(tmp_path):
     op = _operator(tmp_path)
     called = []
-    result = run_governed("demo", {"root": str(tmp_path)}, lambda call: called.append(1) or {}, spec_lookup=_lookup, operator_config=op)
+    result = run_governed("demo", {"root": str(tmp_path)}, lambda call: called.append(1) or {}, spec_lookup=_lookup, operator_config_override=op)
     assert "outside allowed roots" in result["error"]
     assert called == []
     entry = _audit(tmp_path)[-1]
@@ -128,7 +128,7 @@ def test_governed_value_error_becomes_an_error_dict(tmp_path):
     def body(call):
         raise ValueError("unknown spec 'x'")
 
-    result = run_governed("demo", {}, body, spec_lookup=_lookup, operator_config=_operator(tmp_path))
+    result = run_governed("demo", {}, body, spec_lookup=_lookup, operator_config_override=_operator(tmp_path))
     assert result == {"error": "unknown spec 'x'"}
 
 
@@ -136,7 +136,23 @@ def test_governed_unexpected_exception_is_an_internal_error_and_audited(tmp_path
     def body(call):
         raise RuntimeError("secret detail that must not leak")
 
-    result = run_governed("demo", {}, body, spec_lookup=_lookup, operator_config=_operator(tmp_path))
+    result = run_governed("demo", {}, body, spec_lookup=_lookup, operator_config_override=_operator(tmp_path))
     assert result == {"error": "internal error: RuntimeError"}
     entry = _audit(tmp_path)[-1]
     assert (entry["action"], entry["result"]) == ("demo", "error")
+
+
+def test_operator_config_ignores_the_projects_own_config_layers(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".promptwise").mkdir()
+    (tmp_path / ".promptwise" / "config.yaml").write_text("spec:\n  allow_ungrounded: true\n", encoding="utf-8")
+    (tmp_path / "promptwise.config.yaml").write_text("spec:\n  allow_ungrounded: true\n", encoding="utf-8")
+    assert operator_config(env={})["spec"]["allow_ungrounded"] is False
+
+
+def test_operator_config_reads_the_operator_file_and_environment(tmp_path):
+    operator_file = tmp_path / "operator.yaml"
+    operator_file.write_text("gateway:\n  allowed_roots: ['/srv/projects']\n", encoding="utf-8")
+    cfg = operator_config(env={"PROMPTWISE_OPERATOR_CONFIG": str(operator_file), "PROMPTWISE_SPEC__ALLOW_UNGROUNDED": "true"})
+    assert cfg["gateway"]["allowed_roots"] == ["/srv/projects"]
+    assert cfg["spec"]["allow_ungrounded"] is True  # the operator's own environment may loosen it

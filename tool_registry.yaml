@@ -28,3 +28,31 @@ tools:
     version: 0.1.0
     enabled: true
     description_sha256: a23a54c1c7e41f76bdf50b61e0e12fed8bd8e646dcd36dcd1c26d1780f2566bb
+  specify_feature:
+    version: 0.1.0
+    enabled: true
+    description_sha256: 43f350658ea05ca80d8b8d6f26f99a617a23fc10569a7b97557e741846368559
+  plan_feature:
+    version: 0.1.0
+    enabled: true
+    description_sha256: 8d4ca84941587ded52abeff94f568d701f7d6bbda14e3dab77e01fa12e237a45
+  tasks_feature:
+    version: 0.1.0
+    enabled: true
+    description_sha256: c5e3e59d645da3be67bd1f3690a190c154917e3546f0053076e2899b594c8f4b
+  complete_task:
+    version: 0.1.0
+    enabled: true
+    description_sha256: a820563bb29389d8d73139f19266fb779f66b1b232c82b5b349ecbd996488d9d
+  verify_feature:
+    version: 0.1.0
+    enabled: true
+    description_sha256: 822648eccd2724059cfe694664282178dda6a843fcd29accde9fad3cf5bea72b
+  converge_feature:
+    version: 0.1.0
+    enabled: true
+    description_sha256: 157b529958b365b5ffa64e557982660384f4eab675cd5995d33d081430a52740
+  amend_check:
+    version: 0.1.0
+    enabled: true
+    description_sha256: 2593b801e7bad27b29c49c5a91dbb36a3f8b58fef9a312ccf1cad19368cd4294

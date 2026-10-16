@@ -70,8 +70,12 @@ async def test_verify_output_is_rejected_when_its_pinned_description_changed(tmp
 
     registry = tmp_path / "tool_registry.yaml"
     registry.write_text("tools:\n  verify_output:\n    version: '0.1.0'\n    enabled: true\n    description_sha256: 'deadbeef'\n", encoding="utf-8")
-    (tmp_path / ".promptwise").mkdir()
-    (tmp_path / ".promptwise" / "config.yaml").write_text(f"policy:\n  tool_registry_path: {registry.as_posix()}\naudit:\n  log_path: {(tmp_path / 'a.jsonl').as_posix()}\n", encoding="utf-8")
+    operator_file = tmp_path / "operator.yaml"
+    operator_file.write_text(
+        f"policy:\n  tool_registry_path: {registry.as_posix()}\naudit:\n  log_path: {(tmp_path / 'a.jsonl').as_posix()}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PROMPTWISE_OPERATOR_CONFIG", str(operator_file))
     monkeypatch.chdir(tmp_path)
 
     content = await mcp_server.mcp_app.call_tool("verify_output", {"diff": "x", "cwd": str(tmp_path)})

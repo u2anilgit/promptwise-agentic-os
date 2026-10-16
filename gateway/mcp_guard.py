@@ -15,12 +15,13 @@ requirements. Domain-agnostic: no verb logic lives here.
 from __future__ import annotations
 
 import copy
+import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 from core.audit.log import record_audit
-from core.config.resolve import resolve_config_auto
+from core.config.resolve import resolve_config, resolve_config_auto
 from core.policy.tool_pins import guard_tool
 
 # Dotted config keys the project may never override via MCP.
@@ -35,6 +36,23 @@ TRUSTED_KEYS = (
     "spec.allow_fileless_checks",
     "spec.trivial_max_requirements",
 )
+
+
+OPERATOR_CONFIG_ENV = "PROMPTWISE_OPERATOR_CONFIG"
+
+
+def operator_config(env: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """The gateway operator's governance config: system defaults + an
+    optional operator-owned file (path in $PROMPTWISE_OPERATOR_CONFIG) +
+    the process environment. Deliberately NOT the working directory's
+    org/project/local layers — the gateway's cwd may be the very project
+    an agent is editing, so those files are agent-writable. For a hardened
+    deployment keep the operator file, policies dir, tool registry and
+    audit log outside any path the agent can write.
+    """
+    env = env if env is not None else os.environ
+    path = env.get(OPERATOR_CONFIG_ENV)
+    return resolve_config(org_path=Path(path) if path else None, project_path=None, local_path=None, env=env)
 
 
 @dataclass
@@ -109,9 +127,9 @@ def run_governed(
     body: Callable[[GovernedCall], dict[str, Any]],
     *,
     spec_lookup: Callable[[str], tuple[str, dict[str, Any]]],
-    operator_config: dict[str, Any] | None = None,
+    operator_config_override: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    op = operator_config if operator_config is not None else resolve_config_auto()
+    op = operator_config_override if operator_config_override is not None else operator_config()
 
     description, schema = spec_lookup(name)
     decision = guard_tool(op, name, description, schema)

@@ -144,5 +144,133 @@ def run_ingestion_sweep(root: str = "", session_texts: list[str] | None = None, 
     ).model_dump())
 
 
+_TASK_KEYS = {"id", "requirement_ids", "depends_on", "expected_symbols", "task_type"}
+
+
+def _task_nodes(tasks: list[dict]) -> list[TaskNode]:
+    nodes = []
+    for raw in tasks:
+        unknown = set(raw) - _TASK_KEYS
+        if unknown:
+            raise ValueError(f"task '{raw.get('id', '?')}' has unsupported keys {sorted(unknown)} (MCP tasks are interactive: no 'run')")
+        nodes.append(TaskNode(**raw))
+    return nodes
+
+
+@mcp_app.tool()
+def specify_feature(request: str, requirements: list[str], complexity: str = "standard", root: str = "") -> dict:
+    """Start a spec-driven change: record the request and its requirements
+    (one EARS-style sentence each, e.g. "When X, the system shall Y") and
+    get a spec_id. Requirements are numbered R1, R2, ... Use complexity
+    "trivial" only for a one-requirement change; it still needs an
+    acceptance check and verified tests.
+
+    Args:
+        request: The feature request in the user's words.
+        requirements: The requirements, one sentence each.
+        complexity: "standard" or "trivial".
+        root: Project directory; defaults to the server's root.
+    """
+    return _run("specify_feature", {"root": root}, lambda c: _spec.specify_feature(
+        request, requirements, complexity=complexity, config=c.config, root=c.root,  # type: ignore[arg-type]
+    ).model_dump())
+
+
+@mcp_app.tool()
+def plan_feature(spec_id: str, approach: str, root: str = "") -> dict:
+    """Record the implementation approach for a specified feature.
+
+    Args:
+        spec_id: Id returned by specify_feature.
+        approach: How the change will be made.
+        root: Project directory; defaults to the server's root.
+    """
+    return _run("plan_feature", {"root": root}, lambda c: _spec.plan_feature(spec_id, approach, config=c.config, root=c.root).model_dump())
+
+
+@mcp_app.tool()
+def tasks_feature(spec_id: str, tasks: list[dict], checks: list[dict], root: str = "") -> dict:
+    """Break a planned feature into tasks and FREEZE its acceptance checks.
+    Every requirement needs exactly one check; a check names the command
+    to run and the files it depends on (test files, fixtures) — their
+    hashes are frozen now, so editing a check later fails the task unless
+    amend_check is used. Every task must reference at least one requirement.
+
+    Args:
+        spec_id: Id returned by specify_feature.
+        tasks: Task dicts: {"id", "requirement_ids", optional "depends_on", "expected_symbols", "task_type"}.
+        checks: Check dicts: {"requirement_id", "command", "files": [paths]}. The command is policy-gated (shell:run:<program>).
+        root: Project directory; defaults to the server's root.
+    """
+    return _run("tasks_feature", {"root": root}, lambda c: _spec.tasks_feature(
+        spec_id, _task_nodes(tasks), [AcceptanceCheck(**chk) for chk in checks], config=c.config, root=c.root,
+    ).model_dump())
+
+
+@mcp_app.tool()
+def complete_task(spec_id: str, task_id: str, evidence: str, cwd: str = "", root: str = "") -> dict:
+    """Claim a task is done. It is accepted only if its dependencies are
+    done, its frozen acceptance-check files are unmodified, the check
+    commands pass (and are allowed by policy), and the verification gate
+    passes with real tests run. Otherwise it stays pending and `reasons`
+    says why.
+
+    Args:
+        spec_id: Id returned by specify_feature.
+        task_id: The task being completed.
+        evidence: What was done (summary or diff).
+        cwd: Directory to run the verification gate in; defaults to root.
+        root: Project directory; defaults to the server's root.
+    """
+    return _run("complete_task", {"root": root, "cwd": cwd}, lambda c: _spec.complete_task(
+        spec_id, task_id, evidence, cwd=c.paths["cwd"] if cwd else None, config=c.config, root=c.root,
+    ).model_dump())
+
+
+@mcp_app.tool()
+def verify_feature(spec_id: str, root: str = "") -> dict:
+    """Check whether a feature is finished: every task done and every
+    requirement covered by a done task. Marks the spec verified only then.
+
+    Args:
+        spec_id: Id returned by specify_feature.
+        root: Project directory; defaults to the server's root.
+    """
+    return _run("verify_feature", {"root": root}, lambda c: _spec.verify_feature(spec_id, config=c.config, root=c.root).model_dump())
+
+
+@mcp_app.tool()
+def converge_feature(spec_id: str, root: str = "") -> dict:
+    """Read-only drift report: have the requirements, the frozen check
+    files or the expected code symbols changed since planning, and does
+    every requirement still have a task? `stale` is true if anything drifted.
+
+    Args:
+        spec_id: Id returned by specify_feature.
+        root: Project directory; defaults to the server's root.
+    """
+    return _run("converge_feature", {"root": root}, lambda c: _spec.converge_feature(spec_id, config=c.config, root=c.root).model_dump())
+
+
+@mcp_app.tool()
+def amend_check(spec_id: str, requirement_id: str, command: str, files: list[str], reason: str, root: str = "") -> dict:
+    """Deliberately replace a frozen acceptance check (audited with old and
+    new hashes and your reason). Tasks that relied on the old check are
+    reopened. Use only when the requirement genuinely changed.
+
+    Args:
+        spec_id: Id returned by specify_feature.
+        requirement_id: The requirement whose check is replaced (e.g. "R1").
+        command: The new check command (policy-gated).
+        files: Files the new check depends on.
+        reason: Why the check is changing (required).
+        root: Project directory; defaults to the server's root.
+    """
+    return _run("amend_check", {"root": root}, lambda c: _spec.amend_check(
+        spec_id, requirement_id, AcceptanceCheck(requirement_id=requirement_id, command=command, files=files),
+        reason=reason, config=c.config, root=c.root,
+    ).model_dump())
+
+
 if __name__ == "__main__":
     mcp_app.run()
