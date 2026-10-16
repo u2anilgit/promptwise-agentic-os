@@ -40,7 +40,7 @@ explicit recommendation. See `docs/superpowers/plans/2026-08-24-orchestrate-task
   (fails closed either way — no node runs — so this is a diagnostics-quality issue, not a
   correctness one). Fix: add an explicit duplicate-id check ahead of the cycle detection, with a
   clearer error message.
-- [ ] **`route_request` sits outside `orchestrate_tasks`'s per-node `try`** —
+- [ ] **`route_request` sits outside `orchestrate_tasks`'s per-node `try`** **(FIXED 2026-10-16: moved inside try, hw/catalog resolved once per call)** —
   `core/orchestrate/runner.py`: if `route_request` itself raises (`ValueError("no eligible tiers
   in catalog...")`, `core/routing/router.py:54` — reachable with a cloud-only catalog and a
   `privacy_sensitive=True` node mid-DAG), that exception propagates out of `orchestrate_tasks`
@@ -51,11 +51,11 @@ explicit recommendation. See `docs/superpowers/plans/2026-08-24-orchestrate-task
   minor rather than major, but real. Fix: move the `route_request` call inside the per-node `try`,
   or catch its `ValueError` specifically and degrade that one node to
   `routing_decision=None`/`status="error"` rather than letting it abort the DAG.
-- [ ] **`route_request` re-resolves hardware+catalog once per node, no caching across the loop**
+- [x] **`route_request` re-resolves hardware+catalog once per node, no caching across the loop** **(FIXED 2026-10-16: resolved once per call)**
   — a performance nit (`detect_hardware()` + `load_catalog()`'s YAML read happen on every node),
   not a correctness defect. Fix: resolve once per `orchestrate_tasks` call and thread through via
   `route_request`'s existing `hardware`/`catalog` parameters.
-- [ ] Post-plan follow-ups named in the plan/spec themselves: **sub-project 2 — the spec engine**
+- [x] Post-plan follow-ups named in the plan/spec themselves: **sub-project 2 — the spec engine**
   (`specify/plan/tasks/implement/verify`, EARS artifacts) — needs its own brainstorm, will consume
   `orchestrate_tasks` directly; declarative DAG loading for pack-provided `dags/*.yaml` templates
   (`docs/ARCHITECTURE.md` §3); a parallel execution strategy if profiling on a real wide DAG ever
@@ -89,7 +89,7 @@ degrading to BM25-only as the module's own docstring claimed; `embed_text`'s exc
 `docs/superpowers/specs/2026-08-24-memory-fact-layer-design.md`. These are the rest, deliberately
 deferred:
 
-- [ ] **`scope="session"` is not filtered by `session_id` in `query_memory`** (Major, deferred not
+- [ ] **`scope="session"` is not filtered by `session_id` in `query_memory`** **(FIXED 2026-10-16: session_id threaded through SQLite, Qdrant payload and fallback)** (Major, deferred not
   fixed) — `record_memory` accepts and persists `session_id`, but `query_memory` has no
   `session_id` parameter, and neither `search_fts` nor `vectors.search`/`upsert_fact`'s Qdrant
   payload carry it. A session-scoped query today returns facts from every session, not just the
@@ -98,23 +98,23 @@ deferred:
   optional predicate, add it to `vectors.search`'s filter and `upsert_fact`'s payload. Sub-project
   3 (ingestion daemon) is the first planned real consumer of session scope — do this before or
   alongside that work, not speculatively now.
-- [ ] **Duplicated row→`Fact` hydration** — the same 8-column positional row shape is unpacked
+- [x] **Duplicated row→`Fact` hydration** **(FIXED 2026-10-16: _row_to_fact + get_fact in store.py)** — the same 8-column positional row shape is unpacked
   into a `Fact` in both `core/memory/store.py` (`search_fts`) and `core/memory/memory.py`
   (`query_memory`'s vector-only-fallback SELECT). A `_SCHEMA` column reorder would silently
   corrupt one of them without a compiler/type error. Fix: add `_row_to_fact(row) -> Fact` and a
   `get_fact(conn, fact_id) -> Fact | None` to `store.py`; have `memory.py` call `get_fact` instead
   of hand-rolling the SELECT.
-- [ ] **`query_memory`'s SQLite fallback SELECT has no scope/root predicate** — `SELECT ... FROM
+- [x] **`query_memory`'s SQLite fallback SELECT has no scope/root predicate** **(FIXED 2026-10-16: get_fact enforces scope/root/session)** — `SELECT ... FROM
   facts WHERE id = ?` trusts the id list from vector search entirely; safe today only because
   `vectors.search` already filters by scope+root, but it's the one place a fact could enter the
   result set without its own scope check. Defense in depth: add `AND scope = ?` (and the root
   predicate when set) to the fallback query.
-- [ ] **`query_memory` isn't audited on the normal (no-PII-exclusion) path** — `record_audit`
+- [x] **`query_memory` isn't audited on the normal (no-PII-exclusion) path** **(FIXED 2026-10-16: now audited on every call)** — `record_audit`
   only fires inside `if excluded_count:`, so an ordinary query leaves no audit trail at all,
   against goal 4's "every fs/shell/DB/cloud action is governed and audited." Plan-inherited (the
   plan's own sample code did this), not implementer drift. Fix: call `record_audit`
   unconditionally once per `query_memory` call, with `detail={"result_count": ..., "pii_excluded_count": ...}`.
-- [ ] **PII flag is whole-input, not per-fact** — `contains_pii(text)` runs once on the raw input
+- [x] **PII flag is whole-input, not per-fact** — `contains_pii(text)` runs once on the raw input
   and stamps every fact extracted from it, so one email address in a long transcript flags every
   sibling fact. Conservative (over-flags, never under-flags), not a leak, but degrades
   `allow_pii=False` recall over time. Fix (later): flag per extracted fact instead, or document
@@ -126,7 +126,7 @@ deferred:
   reachable when a caller omits `config`, which no current test does. Decide and document where
   session-scoped memory should actually live (a user-level path, not cwd) before a real caller
   hits this.
-- [ ] **`route_request` call in `extract_facts` sits outside its own `try` block** — latent, not
+- [ ] **`route_request` call in `extract_facts` sits outside its own `try` block** **(FIXED 2026-10-16: moved inside try)** — latent, not
   observed: `route_request` can raise `ValueError("no eligible tiers in catalog...")`
   (`core/routing/router.py:54`), and the call is one line above `extract_facts`'s `try:`, so that
   specific exception would escape the "never raises" contract. Four attempted degenerate configs
@@ -134,7 +134,7 @@ deferred:
   router's own fallback absorb them instead — reviewer could not trigger it live. Fix: move the
   `route_request` call inside the existing `try` (the `except Exception` already returns the
   correct unclassified-fact fallback).
-- [ ] Post-plan follow-ups named in the plan itself: MCP tool exposure for `record_memory`/
+- [x] Post-plan follow-ups named in the plan itself: MCP tool exposure for `record_memory`/
   `query_memory` (mirrors `verify_output`'s and the code index's eventual MCP wrapper);
   `kind="doc_chunk"` extension for general RAG (deliberately out of this sub-project's scope);
   `services.ollama`/`services.qdrant` real health checks in `core/diagnostics/checks.py`
