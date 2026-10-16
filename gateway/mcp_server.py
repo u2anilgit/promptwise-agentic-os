@@ -42,8 +42,24 @@ def live_tool_specs() -> dict[str, tuple[str, dict]]:
     return {t.name: (t.description, t.parameters) for t in mcp_app._tool_manager.list_tools()}  # noqa: SLF001
 
 
-def _run(name: str, paths: dict[str, str], body) -> dict[str, Any]:
-    return run_governed(name, paths, body, spec_lookup=live_tool_spec)
+def _run(name: str, paths: dict[str, str], body, detail: dict[str, Any] | None = None) -> dict[str, Any]:
+    return run_governed(name, paths, body, spec_lookup=live_tool_spec, detail=detail)
+
+
+def _untrusted_verify(payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Test/lint/scanner output is repo-influenced text: hand it to the agent as data."""
+    if not payload:
+        return payload
+    for result in payload.get("results", []):
+        result["output"] = tag_untrusted(result.get("output", ""), source="tool_output").wrapped
+        for finding in result.get("findings", []):
+            finding["message"] = tag_untrusted(finding.get("message", ""), source="tool_output").wrapped
+    return payload
+
+
+MAX_QUERY_LIMIT = 100
+MAX_SESSION_TEXTS = 100
+MAX_TEXT_CHARS = 20000
 
 
 @mcp_app.tool()
@@ -64,9 +80,9 @@ def verify_output(diff: str, spec: str = "", cwd: str = "", ledger_key: str = ""
             repeated identical failures across retries. Leave empty to
             skip retry-loop tracking.
     """
-    return _run("verify_output", {"root": cwd}, lambda c: _verify_output(
+    return _run("verify_output", {"root": cwd}, lambda c: _untrusted_verify(_verify_output(
         diff=diff, spec=spec or None, cwd=c.root, config=c.config, ledger_key=ledger_key or None,
-    ).model_dump())
+    ).model_dump()), detail={"ledger_key": ledger_key})
 
 
 @mcp_app.tool()
@@ -98,6 +114,8 @@ def record_memory(text: str, scope: str, root: str = "", session_id: str = "") -
         session_id: Required to isolate recall when scope is "session".
     """
     def body(c: GovernedCall) -> dict:
+        if len(text) > MAX_TEXT_CHARS * 5:
+            raise ValueError(f"text exceeds {MAX_TEXT_CHARS * 5} characters")
         facts = _record_memory(text, scope=scope, root=str(c.root), session_id=session_id or None, config=c.config)
         return {"facts": [f.model_dump() for f in facts]}
 
@@ -119,6 +137,8 @@ def query_memory(query: str, scope: str, root: str = "", session_id: str = "", a
         limit: Maximum facts to return.
     """
     def body(c: GovernedCall) -> dict:
+        if not 1 <= limit <= MAX_QUERY_LIMIT:
+            raise ValueError(f"limit must be between 1 and {MAX_QUERY_LIMIT}")
         facts = _query_memory(query, scope=scope, root=str(c.root), session_id=session_id or None, allow_pii=allow_pii, limit=limit, config=c.config)
         out = []
         for f in facts:
@@ -139,9 +159,13 @@ def run_ingestion_sweep(root: str = "", session_texts: list[str] | None = None, 
         session_texts: Texts (notes, transcript excerpts) to record as facts.
         session_id: Session these texts belong to.
     """
-    return _run("run_ingestion_sweep", {"root": root}, lambda c: _run_ingestion_sweep(
-        c.root, session_texts=list(session_texts or []), session_id=session_id or None, config=c.config,
-    ).model_dump())
+    def body(c: GovernedCall) -> dict:
+        texts = list(session_texts or [])
+        if len(texts) > MAX_SESSION_TEXTS or any(len(t) > MAX_TEXT_CHARS for t in texts):
+            raise ValueError(f"session_texts allows at most {MAX_SESSION_TEXTS} items of {MAX_TEXT_CHARS} characters each")
+        return _run_ingestion_sweep(c.root, session_texts=texts, session_id=session_id or None, config=c.config).model_dump()
+
+    return _run("run_ingestion_sweep", {"root": root}, body)
 
 
 _TASK_KEYS = {"id", "requirement_ids", "depends_on", "expected_symbols", "task_type"}
@@ -173,7 +197,7 @@ def specify_feature(request: str, requirements: list[str], complexity: str = "st
     """
     return _run("specify_feature", {"root": root}, lambda c: _spec.specify_feature(
         request, requirements, complexity=complexity, config=c.config, root=c.root,  # type: ignore[arg-type]
-    ).model_dump())
+    ).model_dump(), detail={"complexity": complexity})
 
 
 @mcp_app.tool()
@@ -185,7 +209,7 @@ def plan_feature(spec_id: str, approach: str, root: str = "") -> dict:
         approach: How the change will be made.
         root: Project directory; defaults to the server's root.
     """
-    return _run("plan_feature", {"root": root}, lambda c: _spec.plan_feature(spec_id, approach, config=c.config, root=c.root).model_dump())
+    return _run("plan_feature", {"root": root}, lambda c: _spec.plan_feature(spec_id, approach, config=c.config, root=c.root).model_dump(), detail={"spec_id": spec_id})
 
 
 @mcp_app.tool()
@@ -204,7 +228,7 @@ def tasks_feature(spec_id: str, tasks: list[dict], checks: list[dict], root: str
     """
     return _run("tasks_feature", {"root": root}, lambda c: _spec.tasks_feature(
         spec_id, _task_nodes(tasks), [AcceptanceCheck(**chk) for chk in checks], config=c.config, root=c.root,
-    ).model_dump())
+    ).model_dump(), detail={"spec_id": spec_id})
 
 
 @mcp_app.tool()
@@ -222,9 +246,14 @@ def complete_task(spec_id: str, task_id: str, evidence: str, cwd: str = "", root
         cwd: Directory to run the verification gate in; defaults to root.
         root: Project directory; defaults to the server's root.
     """
-    return _run("complete_task", {"root": root, "cwd": cwd}, lambda c: _spec.complete_task(
-        spec_id, task_id, evidence, cwd=c.paths["cwd"] if cwd else None, config=c.config, root=c.root,
-    ).model_dump())
+    def body(c: GovernedCall) -> dict:
+        result = _spec.complete_task(
+            spec_id, task_id, evidence, cwd=c.paths["cwd"] if cwd else None, config=c.config, root=c.root,
+        ).model_dump()
+        result["verify"] = _untrusted_verify(result.get("verify"))
+        return result
+
+    return _run("complete_task", {"root": root, "cwd": cwd}, body, detail={"spec_id": spec_id, "task_id": task_id})
 
 
 @mcp_app.tool()
@@ -236,7 +265,7 @@ def verify_feature(spec_id: str, root: str = "") -> dict:
         spec_id: Id returned by specify_feature.
         root: Project directory; defaults to the server's root.
     """
-    return _run("verify_feature", {"root": root}, lambda c: _spec.verify_feature(spec_id, config=c.config, root=c.root).model_dump())
+    return _run("verify_feature", {"root": root}, lambda c: _spec.verify_feature(spec_id, config=c.config, root=c.root).model_dump(), detail={"spec_id": spec_id})
 
 
 @mcp_app.tool()
@@ -249,7 +278,7 @@ def converge_feature(spec_id: str, root: str = "") -> dict:
         spec_id: Id returned by specify_feature.
         root: Project directory; defaults to the server's root.
     """
-    return _run("converge_feature", {"root": root}, lambda c: _spec.converge_feature(spec_id, config=c.config, root=c.root).model_dump())
+    return _run("converge_feature", {"root": root}, lambda c: _spec.converge_feature(spec_id, config=c.config, root=c.root).model_dump(), detail={"spec_id": spec_id})
 
 
 @mcp_app.tool()
@@ -269,7 +298,7 @@ def amend_check(spec_id: str, requirement_id: str, command: str, files: list[str
     return _run("amend_check", {"root": root}, lambda c: _spec.amend_check(
         spec_id, requirement_id, AcceptanceCheck(requirement_id=requirement_id, command=command, files=files),
         reason=reason, config=c.config, root=c.root,
-    ).model_dump())
+    ).model_dump(), detail={"spec_id": spec_id, "requirement_id": requirement_id})
 
 
 if __name__ == "__main__":

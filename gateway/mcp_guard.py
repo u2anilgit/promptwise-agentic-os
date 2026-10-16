@@ -3,14 +3,20 @@
 "registry enforcement happens here at the boundary").
 
 Order: tool registry + description pin -> path confinement -> effective
-config -> audit -> verb -> errors returned as {"error": ...}, never raised.
+config -> pre-call audit -> verb -> post-call audit -> errors returned as
+{"error": ...}, never raised. No verb runs if its pre-call audit record
+cannot be written.
 
-Security model: the *agent* controls tool arguments and can write files
-in the project it points at, including a `.promptwise/config.yaml`. So the
-call runs with the project's config, except the governance keys below are
-forced from the *operator's* config (the gateway process's own working
-directory) — a project cannot loosen its own policy, audit or verification
-requirements. Domain-agnostic: no verb logic lives here.
+Threat model: the MCP caller is an AI agent that is only partly trusted. It
+chooses every tool argument and can write files inside the project it points
+at, including `.promptwise/config.yaml`. So a call runs on the *operator's*
+config, and a project may contribute exactly two things: its
+`verify.test_command` / `verify.lint_command`, and only when the operator has
+pre-approved that exact string in `gateway.allowed_verify_commands`. Every
+other key (state paths, endpoints, policy, limits, timeouts) is the
+operator's, and governance state files (audit, ledger, JIT grants, undo
+buffer, spec database) are pinned to the gateway's own directory. Domain-
+agnostic: no verb logic lives here.
 """
 from __future__ import annotations
 
@@ -21,22 +27,20 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from core.audit.log import record_audit
-from core.config.resolve import resolve_config, resolve_config_auto
+from core.config.resolve import resolve_config, resolve_config_auto, resolve_path
 from core.policy.tool_pins import guard_tool
 
-# Dotted config keys the project may never override via MCP.
-TRUSTED_KEYS = (
-    "audit",
-    "policy",
-    "security",
-    "gateway",
-    "paths.policies_dir",
-    "spec.enforce_command_policy",
-    "spec.allow_ungrounded",
-    "spec.allow_fileless_checks",
-    "spec.trivial_max_requirements",
-)
+# The only project-supplied values an MCP call will honour (see module docstring).
+PROJECT_VERIFY_KEYS = ("test_command", "lint_command")
 
+# Governance state that must live with the gateway, never under a project:
+# (dotted config key, default relative path).
+OPERATOR_STATE_PATHS = (
+    ("database.path", ".promptwise/agentic.sqlite3"),
+    ("verify.failure_ledger_path", ".promptwise/failure_ledger.json"),
+    ("policy.jit_grants_path", ".promptwise/jit_grants.json"),
+    ("actions.undo_buffer_path", ".promptwise/undo_buffer.json"),
+)
 
 OPERATOR_CONFIG_ENV = "PROMPTWISE_OPERATOR_CONFIG"
 
@@ -47,8 +51,8 @@ def operator_config(env: Mapping[str, str] | None = None) -> dict[str, Any]:
     the process environment. Deliberately NOT the working directory's
     org/project/local layers — the gateway's cwd may be the very project
     an agent is editing, so those files are agent-writable. For a hardened
-    deployment keep the operator file, policies dir, tool registry and
-    audit log outside any path the agent can write.
+    deployment keep the operator file, policies dir, tool registry, audit
+    log and database outside any path the agent can write.
     """
     env = env if env is not None else os.environ
     path = env.get(OPERATOR_CONFIG_ENV)
@@ -57,7 +61,7 @@ def operator_config(env: Mapping[str, str] | None = None) -> dict[str, Any]:
 
 @dataclass
 class GovernedCall:
-    config: dict[str, Any]  # effective config (project config + operator-forced keys)
+    config: dict[str, Any]  # effective config (operator config + approved project verify commands)
     root: Path  # confined project root
     paths: dict[str, Path]  # every confined path argument, by parameter name
 
@@ -79,15 +83,6 @@ def confine(operator_config: dict[str, Any], value: str) -> Path | None:
     return None
 
 
-def _get(cfg: dict[str, Any], dotted: str) -> tuple[bool, Any]:
-    cursor: Any = cfg
-    for key in dotted.split("."):
-        if not isinstance(cursor, dict) or key not in cursor:
-            return False, None
-        cursor = cursor[key]
-    return True, cursor
-
-
 def _set(cfg: dict[str, Any], dotted: str, value: Any) -> None:
     keys = dotted.split(".")
     cursor = cfg
@@ -99,26 +94,29 @@ def _set(cfg: dict[str, Any], dotted: str, value: Any) -> None:
     cursor[keys[-1]] = value
 
 
-def _drop(cfg: dict[str, Any], dotted: str) -> None:
-    keys = dotted.split(".")
-    cursor: Any = cfg
-    for key in keys[:-1]:
-        cursor = cursor.get(key) if isinstance(cursor, dict) else None
-        if cursor is None:
-            return
-    if isinstance(cursor, dict):
-        cursor.pop(keys[-1], None)
-
-
 def effective_config(operator_config: dict[str, Any], root: Path) -> dict[str, Any]:
-    cfg = resolve_config_auto(root=root)
-    for dotted in TRUSTED_KEYS:
-        present, value = _get(operator_config, dotted)
-        if present:
-            _set(cfg, dotted, copy.deepcopy(value))
-        else:
-            _drop(cfg, dotted)  # operator did not set it: the project must not either
+    cfg = copy.deepcopy(operator_config)
+
+    project = resolve_config_auto(root=root)
+    project_verify = project.get("verify") if isinstance(project.get("verify"), dict) else {}
+    allowed = operator_config.get("gateway", {}).get("allowed_verify_commands") or []
+    for key in PROJECT_VERIFY_KEYS:
+        value = project_verify.get(key)
+        if isinstance(value, str) and value and value in allowed:
+            _set(cfg, f"verify.{key}", value)
+
+    gateway_root = Path.cwd()
+    for dotted, default in OPERATOR_STATE_PATHS:
+        _set(cfg, dotted, str(resolve_path(operator_config, dotted, default, root=gateway_root)))
     return cfg
+
+
+def _safe_audit(op: dict[str, Any], **fields: Any) -> bool:
+    try:
+        record_audit(op, actor="mcp", **fields)
+        return True
+    except Exception:  # noqa: BLE001 - callers decide what an unwritable audit log means
+        return False
 
 
 def run_governed(
@@ -128,32 +126,41 @@ def run_governed(
     *,
     spec_lookup: Callable[[str], tuple[str, dict[str, Any]]],
     operator_config_override: dict[str, Any] | None = None,
+    detail: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     op = operator_config_override if operator_config_override is not None else operator_config()
+    extra = dict(detail or {})
 
     description, schema = spec_lookup(name)
     decision = guard_tool(op, name, description, schema)
     if not decision.allowed:
+        _safe_audit(op, action="mcp_tool_denied", target=name, result="deny", detail={"status": decision.status, **extra})
         return {"error": f"{decision.reason} (tool_registry.yaml) - rejected at the boundary"}
 
     confined: dict[str, Path] = {}
     for param, value in paths.items():
         resolved = confine(op, value)
         if resolved is None:
-            record_audit(op, actor="mcp", action="mcp_root_denied", target=name, result="deny", detail={"param": param, "value": value})
+            _safe_audit(op, action="mcp_root_denied", target=name, result="deny", detail={"param": param, "value": value, **extra})
             return {"error": f"path '{param}' is outside allowed roots"}
         confined[param] = resolved
 
     root = confined.get("root") or allowed_roots(op)[0]
-    try:
-        call = GovernedCall(config=effective_config(op, root), root=root, paths=confined)
-        result = body(call)
-    except ValueError as exc:
-        record_audit(op, actor="mcp", action=name, target=str(root), result="error", detail={"error": str(exc)})
-        return {"error": str(exc)}
-    except Exception as exc:  # noqa: BLE001 - never leak internals or crash the transport
-        record_audit(op, actor="mcp", action=name, target=str(root), result="error", detail={"error_type": type(exc).__name__})
-        return {"error": f"internal error: {type(exc).__name__}"}
+    audit_detail = {**extra, **{f"path_{k}": str(v) for k, v in confined.items()}}
 
-    record_audit(op, actor="mcp", action=name, target=str(root), result="allow", detail={})
+    # Fail closed: no tool runs without a written pre-call record.
+    if not _safe_audit(op, action=name, target=str(root), result="allow", detail={"phase": "start", **audit_detail}):
+        return {"error": "audit log unavailable - refusing to run the tool"}
+
+    try:
+        result = body(GovernedCall(config=effective_config(op, root), root=root, paths=confined))
+        outcome, outcome_detail = "allow", {"phase": "done", **audit_detail}
+    except ValueError as exc:
+        result, outcome, outcome_detail = {"error": str(exc)}, "error", {"phase": "done", "error": str(exc), **audit_detail}
+    except Exception as exc:  # noqa: BLE001 - never leak internals or crash the transport
+        result = {"error": f"internal error: {type(exc).__name__}"}
+        outcome, outcome_detail = "error", {"phase": "done", "error_type": type(exc).__name__, **audit_detail}
+
+    if not _safe_audit(op, action=name, target=str(root), result=outcome, detail=outcome_detail):  # type: ignore[arg-type]
+        result = {**result, "audit_warning": "the tool ran but its completion record could not be written"}
     return result

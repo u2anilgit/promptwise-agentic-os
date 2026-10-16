@@ -140,6 +140,27 @@ def test_policy_enforcement_can_be_disabled_explicitly(project):
     assert complete_task(spec_id, "t1", "e", config=config, root=tmp).accepted
 
 
+# Review M1 (mcp-exposure) — check files must stay inside the project root
+def test_check_files_outside_the_project_root_are_rejected(project):
+    tmp, config = project
+    outside = tmp.parent / f"{tmp.name}-outside.py"
+    outside.write_text("print('x')\n", encoding="utf-8")
+    spec_id = _planned(project)
+    for bad in (f"../{outside.name}", str(outside)):
+        with pytest.raises(ValueError, match="outside the project root"):
+            tasks_feature(spec_id, interactive_tasks(), _all_checks_with(command=f"python {bad}", files=[bad]), config=config, root=tmp)
+
+
+def test_amend_check_rejects_files_outside_the_project_root(project):
+    tmp, config = project
+    spec_id = _tasked(project)
+    outside = tmp.parent / f"{tmp.name}-outside2.py"
+    outside.write_text("print('x')\n", encoding="utf-8")
+    bad = AcceptanceCheck(requirement_id="R1", command=f"python ../{outside.name}", files=[f"../{outside.name}"])
+    with pytest.raises(ValueError, match="outside the project root"):
+        amend_check(spec_id, "R1", bad, reason="x", config=config, root=tmp)
+
+
 # M1 (promoted) — database newer than the code is a clear ValueError, not an Alembic traceback
 def test_database_newer_than_code_raises_a_clear_value_error(project):
     tmp, config = project

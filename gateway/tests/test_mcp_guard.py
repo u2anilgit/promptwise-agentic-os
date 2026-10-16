@@ -4,7 +4,7 @@ import os
 import pytest
 
 from core.policy.tool_pins import tool_description_hash
-from gateway.mcp_guard import allowed_roots, confine, effective_config, operator_config, run_governed
+from gateway.mcp_guard import allowed_roots, confine, operator_config, run_governed
 
 DESC, SCHEMA = "Demo tool", {"type": "object"}
 
@@ -66,27 +66,6 @@ def test_confine_rejects_a_symlink_that_escapes(tmp_path):
         pytest.skip("symlink creation not permitted on this machine")
     assert confine(op, str(link)) is None
 
-
-def test_effective_config_forces_trusted_keys_from_the_operator(tmp_path):
-    op = _operator(tmp_path)
-    project = tmp_path / "work"
-    (project / ".promptwise").mkdir()
-    (project / ".promptwise" / "config.yaml").write_text(
-        "spec:\n  allow_ungrounded: true\n  enforce_command_policy: false\n  allow_fileless_checks: true\n"
-        "paths:\n  policies_dir: EVIL_POLICIES\n"
-        "audit:\n  log_path: EVIL_AUDIT.jsonl\n"
-        "policy:\n  default_effect: allow\n"
-        "verify:\n  test_command: 'python -c \"pass\"'\n",
-        encoding="utf-8",
-    )
-    cfg = effective_config(op, project)
-    assert cfg["spec"]["allow_ungrounded"] is False
-    assert cfg["spec"]["enforce_command_policy"] is True
-    assert cfg["spec"]["allow_fileless_checks"] is False
-    assert cfg["paths"]["policies_dir"] == "OPERATOR_POLICIES"
-    assert cfg["audit"]["log_path"] == op["audit"]["log_path"]
-    assert cfg["policy"]["default_effect"] == "deny"
-    assert cfg["verify"]["test_command"] == 'python -c "pass"'  # non-trusted project keys survive
 
 
 def test_governed_runs_the_body_and_audits_the_call(tmp_path):

@@ -5,7 +5,10 @@
 rules: []
 
 # The spec engine (core/spec) policy-gates every acceptance-check command as
-# `shell:run:<program>` before running it. To let it run, e.g., python and pytest:
+# `shell:run:<program>` before running it. NOTE: allowing an interpreter (python, node,
+# sh...) allows arbitrary code run through it; prefer allowing a specific test runner,
+# and a path-qualified program (bin/python) is matched by its resolved absolute path.
+# To let it run, e.g., python and pytest:
 #
 # rules:
 #   - action: "shell:run:python"

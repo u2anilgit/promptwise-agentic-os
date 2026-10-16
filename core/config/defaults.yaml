@@ -11,6 +11,8 @@ diagnostics:
   hardware_profile_path: config/hardware_profile.yaml
 gateway:
   port: 8000
+  allowed_roots: []
+  allowed_verify_commands: []
 paths:
   packs_installed: packs/installed
   packs_registry: packs/registry

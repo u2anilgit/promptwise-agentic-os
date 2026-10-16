@@ -4,19 +4,24 @@ import pytest
 @pytest.fixture
 def operator(tmp_path, monkeypatch):
     """A gateway 'operator' environment: cwd = tmp_path with its own tool registry
-    (every live MCP tool enabled + pinned), a policy allowing `python`, and
-    unreachable Ollama/Qdrant so memory verbs exercise their degraded paths fast."""
+    (every live MCP tool enabled + pinned), a policy allowing `python`, an
+    operator config (PROMPTWISE_OPERATOR_CONFIG) that pre-approves the verify
+    command `python -c "pass"` and points Ollama/Qdrant at a closed port so memory
+    verbs exercise their degraded paths fast."""
     from core.config.resolve import resolve_config_auto
     from core.policy.tool_pins import write_pins
     from gateway.mcp_server import live_tool_specs
 
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".promptwise").mkdir()
-    (tmp_path / ".promptwise" / "config.yaml").write_text(
+    (tmp_path / ".promptwise" / "config.yaml").write_text("verify:\n  test_command: ''\n  lint_command: ''\n", encoding="utf-8")
+    operator_file = tmp_path.parent / f"{tmp_path.name}-operator.yaml"
+    operator_file.write_text(
         "memory:\n  qdrant_url: http://127.0.0.1:9\n  ollama_base_url: http://127.0.0.1:9\n"
-        "verify:\n  test_command: ''\n  lint_command: ''\n",
+        "gateway:\n  allowed_verify_commands:\n    - 'python -c \"pass\"'\n",
         encoding="utf-8",
     )
+    monkeypatch.setenv("PROMPTWISE_OPERATOR_CONFIG", str(operator_file))
     (tmp_path / "policies").mkdir()
     (tmp_path / "policies" / "allow.yaml").write_text(
         "rules:\n  - action: 'shell:run:python'\n    effect: allow\n", encoding="utf-8"

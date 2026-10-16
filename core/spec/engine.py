@@ -181,6 +181,16 @@ def _unreferenced_check_files(checks: list[AcceptanceCheck]) -> list[str]:
     return [c.requirement_id for c in checks if c.files and not any(norm(f) in norm(c.command) for f in c.files)]
 
 
+def _check_file(base: Path, relative: str, requirement_id: str) -> Path:
+    path = (base / relative).resolve()
+    root = base.resolve()
+    if path != root and root not in path.parents:
+        raise ValueError(f"acceptance check file '{relative}' for requirement '{requirement_id}' is outside the project root")
+    if not path.is_file():
+        raise ValueError(f"acceptance check file '{relative}' for requirement '{requirement_id}' does not exist")
+    return path
+
+
 def _freeze_checks(spec: SpecArtifact, checks: list[AcceptanceCheck], base: Path, config: dict[str, Any]) -> list[FrozenCheck]:
     seen: set[str] = set()
     for c in checks:
@@ -198,10 +208,7 @@ def _freeze_checks(spec: SpecArtifact, checks: list[AcceptanceCheck], base: Path
         _validate_check_command(c, config)
         hashes: dict[str, str] = {}
         for f in c.files:
-            path = base / f
-            if not path.is_file():
-                raise ValueError(f"acceptance check file '{f}' for requirement '{c.requirement_id}' does not exist")
-            hashes[f] = file_sha256(path)
+            hashes[f] = file_sha256(_check_file(base, f, c.requirement_id))
         frozen.append(FrozenCheck(requirement_id=c.requirement_id, command=c.command, files=list(c.files), file_hashes=hashes))
     return frozen
 
@@ -274,11 +281,18 @@ def _unchanged(base: Path, check: FrozenCheck) -> list[str]:
     return changed
 
 
-def _command_action(command: str) -> str:
+def _command_action(command: str, base: Path) -> str:
+    """Policy action for a check command. A bare program name maps to
+    shell:run:<name>; anything containing a path separator maps to its
+    resolved absolute path, so a file merely *named* python cannot ride on
+    an allow rule for the real interpreter. Allowing an interpreter still
+    allows arbitrary code run through it."""
     try:
         argv0 = shlex.split(command)[0]
     except (ValueError, IndexError):
         return "shell:run:"
+    if "/" in argv0 or chr(92) in argv0:
+        return "shell:run:" + (base / argv0).resolve().as_posix()
     name = Path(argv0).name
     return f"shell:run:{name[:-4] if name.lower().endswith('.exe') else name}"
 
@@ -324,7 +338,7 @@ def complete_task(
     if _spec_setting(config, "enforce_command_policy", True):
         denied: dict[str, str] = {}
         for c in task_checks:
-            action = _command_action(c.command)
+            action = _command_action(c.command, base)
             if not check_policy(action, config).allowed:
                 denied[c.requirement_id] = action
         if denied:
@@ -370,10 +384,7 @@ def amend_check(
 
     hashes: dict[str, str] = {}
     for f in new_check.files:
-        path = base / f
-        if not path.is_file():
-            raise ValueError(f"acceptance check file '{f}' for requirement '{requirement_id}' does not exist")
-        hashes[f] = file_sha256(path)
+        hashes[f] = file_sha256(_check_file(base, f, requirement_id))
     new = FrozenCheck(requirement_id=requirement_id, command=new_check.command, files=list(new_check.files), file_hashes=hashes)
 
     with session_scope(config, root) as session:

@@ -316,11 +316,13 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 
 ### From MCP exposure build, 2026-10-16
 
-- [ ] `verify_output`/`complete_task` run the *project's* `verify.test_command` and `lint_command` (project-controlled config = agent-writable). Needs an operator allow-list of runnable commands, or routing through a governed `shell_exec` verb.
+- [x] FIXED 2026-10-16 (security review of feat/mcp-exposure): MCP calls now run on operator config; project `verify.test_command`/`lint_command` honoured only if listed in `gateway.allowed_verify_commands`; governance state pinned to the gateway dir; pre-call audit fail-closed. Remaining: a governed `shell_exec` verb would let policy, not an exact-string allowlist, gate these commands.
 - [ ] Operator files (`policies/`, `tool_registry.yaml`, audit log) default to repo-relative paths an agent can write; hardened deployments must relocate them via `PROMPTWISE_OPERATOR_CONFIG` (documented in `gateway/CLAUDE.md`). Consider a doctor check that WARNs when they sit inside an allowed root.
 - [ ] No authentication on the MCP/HTTP surface; `gateway.allowed_roots` is the only caller-independent control. Identity/tenancy is a separate project.
 - [ ] `promptwise spec` CLI (specify/plan/tasks/complete/verify/converge) for humans.
 - [ ] Check the MCP server against the 2026-07-28 stateless spec revision.
+
+- [ ] Review minors deferred (mcp-exposure): `record_memory`/`converge_feature`/error strings are not `<untrusted>`-wrapped; per-call resolve of `Path.resolve()` TOCTOU on subdirectories after confinement; `os.walk` in the code index may follow junctions out of the root; `semgrep_config` accepted from operator only now but remote rule URLs are not validated; symlink-escape test is skipped without privilege (a junction-based test would give real coverage on Windows); `gateway.allowed_roots` empty means gateway cwd only — multi-root deployments need explicit entries.
 
 ## Resolved
 
