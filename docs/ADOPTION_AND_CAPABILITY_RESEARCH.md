@@ -16,6 +16,7 @@ Without these planes, the current core is useful but remains a toolkit. With the
 
 ## Research signals
 
+- **Superseded in part (2026-10-16): the MCP spec revision 2026-07-28 changed authorization (`iss` validation, Client ID Metadata Documents over Dynamic Client Registration) and made the protocol stateless — see `docs/research/2026-10-16-mcp-2026-07-28-compat.md`. The 2025-06-18 text below is the older baseline.**
 - MCP’s HTTP authorization guidance expects OAuth 2.1, protected-resource metadata, authorization-server metadata, PKCE, and resource indicators when authorization is used. This makes a future authenticated remote gateway materially different from the current local stdio-style exposure. [MCP authorization](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)
 - A2A is now an open interoperability protocol for independent agents, complementary to MCP’s tool/data connectivity. It is relevant for enterprise delegation and external agent federation, but should be an adapter after the core workflow contract is stable. [A2A specification](https://github.com/a2aproject/A2A/blob/main/docs/specification.md)
 - LiteLLM’s proxy model demonstrates the adoption baseline for paid-model gateways: authentication, virtual keys, per-user/project budgets, rate limiting, provider fallbacks, spend tracking, and observability callbacks. [LiteLLM documentation](https://docs.litellm.ai/)

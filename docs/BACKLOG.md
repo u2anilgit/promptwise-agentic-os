@@ -21,7 +21,7 @@ Not yet brainstormed/planned — flagging here so it isn't lost.
   into `core/audit/` so "why did the agent remember this" is itself an audited decision.
   No researched competitor does this; real differentiation, small scope, needs its own
   brainstorm.
-- [ ] **Confirm in-process MCP server targets the 2026-07-28 MCP spec revision** (stateless
+- [x] **CHECKED 2026-10-16** (`docs/research/2026-10-16-mcp-2026-07-28-compat.md`): the server runs on `mcp 1.29.0`, which speaks protocol versions up to 2025-11-25 only; design is already stateless; migration to SDK 2.x tracked below. Original: **Confirm in-process MCP server targets the 2026-07-28 MCP spec revision** (stateless
   core, Multi Round-Trip Requests replacing server-initiated streaming) before Phase 6
   dashboard's WebSocket/live-feed design locks in assumptions the new spec removes.
 - [ ] **`core/actions/` is undocumented** — exists on disk, not in `core/CLAUDE.md`'s
@@ -320,7 +320,7 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 - [ ] Operator files (`policies/`, `tool_registry.yaml`, audit log) default to repo-relative paths an agent can write; hardened deployments must relocate them via `PROMPTWISE_OPERATOR_CONFIG` (documented in `gateway/CLAUDE.md`). Consider a doctor check that WARNs when they sit inside an allowed root.
 - [ ] No authentication on the MCP/HTTP surface; `gateway.allowed_roots` is the only caller-independent control. Identity/tenancy is a separate project.
 - [x] DONE 2026-10-16 (branch feat/spec-cli): `promptwise spec specify|plan|tasks|complete|verify|converge|status|amend` (exit 0 ok / 1 rejected-or-stale / 2 error) plus read-only `spec_status` verb. Note: `spec_status`/`converge_feature` are unaudited reads.
-- [ ] Check the MCP server against the 2026-07-28 stateless spec revision.
+- [x] Done (see above). Remaining: **migrate `gateway/mcp_server.py` to SDK 2.x** (`FastMCP` -> `MCPServer` from `mcp.server.mcpserver`, `inputSchema` -> `input_schema`, verify `call_tool` result shape and stdio launch with a real client, public accessor instead of `_tool_manager`), then consider the Tasks extension for long `complete_task` runs and `_meta` OpenTelemetry propagation. Bound stays `mcp>=1.27,<2` until then.
 
 - [ ] Review minors deferred (mcp-exposure): `record_memory`/`converge_feature`/error strings are not `<untrusted>`-wrapped; per-call resolve of `Path.resolve()` TOCTOU on subdirectories after confinement; `os.walk` in the code index may follow junctions out of the root; `semgrep_config` accepted from operator only now but remote rule URLs are not validated; symlink-escape test is skipped without privilege (a junction-based test would give real coverage on Windows); `gateway.allowed_roots` empty means gateway cwd only — multi-root deployments need explicit entries.
 
