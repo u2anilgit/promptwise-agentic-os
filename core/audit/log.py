@@ -22,7 +22,7 @@ GENESIS_HASH = "0" * 64
 
 
 def _log_path(config: dict[str, Any]) -> Path:
-    return resolve_path(config, "audit.log_path", ".promptwise/audit.jsonl")
+    return resolve_path(config, "audit.log_path", ".promptwise/agentic_audit.jsonl")
 
 
 def _record_hash(record_without_hash: dict[str, Any]) -> str:

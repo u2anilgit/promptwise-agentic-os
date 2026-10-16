@@ -55,6 +55,27 @@ def test_audit_chain_check_passes_by_default():
     assert audit_check.status == "PASS"
 
 
+def test_audit_chain_ignores_foreign_plugin_audit_file(tmp_path, monkeypatch):
+    # The PromptWise Claude Code plugin hooks write their own-schema records to
+    # .promptwise/audit.jsonl; the core's hash-chained log must not share that file.
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".promptwise").mkdir()
+    (tmp_path / ".promptwise" / "audit.jsonl").write_text(
+        '{"agent": "claude-code", "index": 0, "prev_hash": "0", "hash": "x", "task": "apply_patch"}\n',
+        encoding="utf-8",
+    )
+    results = run_diagnostics()
+    audit_check = next(r for r in results if r.name == "audit.chain")
+    assert audit_check.status == "PASS"
+
+
+def test_default_audit_log_path_is_not_the_plugin_audit_path():
+    from core.config.resolve import resolve_config_auto
+
+    config = resolve_config_auto()
+    assert config["audit"]["log_path"] != ".promptwise/audit.jsonl"
+
+
 def test_no_failures_means_clean_exit():
     results = run_diagnostics()
     assert not any(r.status == "FAIL" for r in results)

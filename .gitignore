@@ -9,3 +9,12 @@ config/hardware_profile.yaml
 .promptwise/local.yaml
 .env
 compose/.env
+
+# Runtime state written by the core engine / PromptWise plugin hooks
+.promptwise/*.jsonl
+.promptwise/*.sqlite3*
+.promptwise/failure_ledger.json
+.promptwise/undo_buffer.json
+.promptwise/jit_grants.json
+.promptwise/audit_export.json
+.promptwise/tool_call_counts.json

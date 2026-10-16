@@ -17,7 +17,7 @@ paths:
   model_catalog: catalog/model_catalog.yaml
   policies_dir: policies
 audit:
-  log_path: .promptwise/audit.jsonl
+  log_path: .promptwise/agentic_audit.jsonl
 memory:
   db_path: .promptwise/memory.sqlite3
   qdrant_url: http://127.0.0.1:6333

@@ -30,7 +30,7 @@ def _resolved_config_text(config: dict[str, Any]) -> str:
 def _audit_tail_text(config: dict[str, Any], max_lines: int = 200) -> str:
     from core.config.resolve import resolve_path
 
-    path = resolve_path(config, "audit.log_path", ".promptwise/audit.jsonl")
+    path = resolve_path(config, "audit.log_path", ".promptwise/agentic_audit.jsonl")
     if not path.exists():
         return ""
     with path.open("r", encoding="utf-8") as f:
