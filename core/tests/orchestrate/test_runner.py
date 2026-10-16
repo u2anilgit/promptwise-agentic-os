@@ -93,3 +93,53 @@ def test_orchestrate_tasks_on_an_empty_dag_returns_empty_results(tmp_path):
     result = orchestrate_tasks(dag, config=_config(tmp_path))
     assert result.dag_name == "empty"
     assert result.nodes == {}
+
+
+def test_orchestrate_tasks_degrades_one_node_when_route_request_raises(tmp_path, monkeypatch):
+    import core.orchestrate.runner as runner_module
+
+    real_route = runner_module.route_request
+
+    def flaky_route(request, **kwargs):
+        if request.privacy_sensitive:
+            raise ValueError("no eligible tiers in catalog for this request")
+        return real_route(request, **kwargs)
+
+    monkeypatch.setattr(runner_module, "route_request", flaky_route)
+    dag = Dag(
+        name="route-fail",
+        nodes=[
+            DagNode(id="ok-first", run=lambda inputs: "first"),
+            DagNode(id="bad", run=lambda inputs: "never", privacy_sensitive=True),
+            DagNode(id="dependent", run=lambda inputs: "never", depends_on=["bad"]),
+            DagNode(id="ok-last", run=lambda inputs: "last"),
+        ],
+    )
+    result = orchestrate_tasks(dag, config=_config(tmp_path))
+    assert result.nodes["ok-first"].status == "done"
+    assert result.nodes["bad"].status == "error"
+    assert "no eligible tiers" in result.nodes["bad"].error
+    assert result.nodes["dependent"].status == "skipped"
+    assert result.nodes["ok-last"].status == "done"
+
+
+def test_orchestrate_tasks_resolves_hardware_and_catalog_once_per_call(tmp_path, monkeypatch):
+    import core.orchestrate.runner as runner_module
+
+    calls = {"hardware": 0, "catalog": 0}
+    real_detect = runner_module.detect_hardware
+    real_load = runner_module.load_catalog
+
+    def counting_detect():
+        calls["hardware"] += 1
+        return real_detect()
+
+    def counting_load(config):
+        calls["catalog"] += 1
+        return real_load(config)
+
+    monkeypatch.setattr(runner_module, "detect_hardware", counting_detect)
+    monkeypatch.setattr(runner_module, "load_catalog", counting_load)
+    dag = Dag(name="many", nodes=[DagNode(id=str(i), run=lambda inputs: 1) for i in range(4)])
+    orchestrate_tasks(dag, config=_config(tmp_path))
+    assert calls == {"hardware": 1, "catalog": 1}

@@ -37,3 +37,14 @@ def test_extract_facts_falls_back_to_one_unclassified_fact_on_invalid_json():
 def test_extract_facts_empty_text_returns_empty_list():
     assert extract_facts("   ", _config()) == []
     assert extract_facts("", _config()) == []
+
+
+def test_extract_facts_falls_back_when_route_request_raises(monkeypatch):
+    import core.memory.extract as extract_module
+
+    def boom(*args, **kwargs):
+        raise ValueError("no eligible tiers in catalog for this request")
+
+    monkeypatch.setattr(extract_module, "route_request", boom)
+    facts = extract_module.extract_facts("The user prefers tabs.", {}, http_post=lambda url, payload: {})
+    assert facts == [{"text": "The user prefers tabs.", "category": "unclassified"}]

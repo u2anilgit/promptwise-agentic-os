@@ -13,8 +13,10 @@ from typing import Any
 
 from core.audit.log import record_audit
 from core.config.resolve import resolve_config_auto
+from core.diagnostics.hardware import detect_hardware
 from core.orchestrate.graph import topological_order
 from core.orchestrate.models import Dag, DagResult, NodeResult
+from core.routing.catalog import load_catalog
 from core.routing.router import RouteRequest, route_request
 
 
@@ -22,6 +24,8 @@ def orchestrate_tasks(dag: Dag, config: dict[str, Any] | None = None) -> DagResu
     order = topological_order(dag)  # raises ValueError on cycle/dangling ref before anything runs
     config = config if config is not None else resolve_config_auto()
     nodes_by_id = {node.id: node for node in dag.nodes}
+    hardware = detect_hardware()  # resolved once per call, threaded into every route_request
+    catalog = load_catalog(config)
 
     results: dict[str, NodeResult] = {}
     for node_id in order:
@@ -36,21 +40,20 @@ def orchestrate_tasks(dag: Dag, config: dict[str, Any] | None = None) -> DagResu
             )
             continue
 
-        decision = route_request(
-            RouteRequest(task_type=node.task_type, privacy_sensitive=node.privacy_sensitive),
-            config=config,
-        )
-        inputs: dict[str, Any] = {dep: results[dep].output for dep in node.depends_on}
-        inputs["routing_decision"] = decision
-
         try:
+            decision = route_request(
+                RouteRequest(task_type=node.task_type, privacy_sensitive=node.privacy_sensitive),
+                hardware=hardware, config=config, catalog=catalog,
+            )
+            inputs: dict[str, Any] = {dep: results[dep].output for dep in node.depends_on}
+            inputs["routing_decision"] = decision
             output = node.run(inputs)
             results[node_id] = NodeResult(status="done", output=output)
             record_audit(
                 config, actor="orchestrate_tasks", action=node_id, target=dag.name,
                 result="allow", detail={"tier": decision.tier},
             )
-        except Exception as exc:  # noqa: BLE001 — one node's failure must not abort the DAG
+        except Exception as exc:  # noqa: BLE001 — one node's failure (routing included) must not abort the DAG
             results[node_id] = NodeResult(status="error", error=str(exc))
             record_audit(
                 config, actor="orchestrate_tasks", action=node_id, target=dag.name,
