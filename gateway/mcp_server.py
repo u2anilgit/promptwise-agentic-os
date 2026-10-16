@@ -262,6 +262,7 @@ def complete_task(spec_id: str, task_id: str, evidence: str, cwd: str = "", root
             spec_id, task_id, evidence, cwd=c.paths["cwd"] if cwd else None, config=c.config, root=c.root,
         ).model_dump()
         result["verify"] = _untrusted_verify(result.get("verify"))
+        result["notes"] = [tag_untrusted(note, source="reviewer").wrapped for note in result.get("notes", [])]
         return result
 
     return _run("complete_task", {"root": root, "cwd": cwd}, body, detail={"spec_id": spec_id, "task_id": task_id})

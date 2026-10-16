@@ -45,6 +45,22 @@ uv pip compile pyproject.toml --universal --python-version 3.12 --generate-hashe
 
 A lock is only trusted after it is exercised: create a venv from the dev lock (`uv venv --python 3.12`, `uv pip sync --require-hashes requirements-dev.lock`, `uv pip install --no-deps -e .`) and run the full suite in it. `core/tests/security/test_lockfiles.py` guards that every pin is hashed, none is on the known-bad list, every direct dependency is present, and LiteLLM is absent. Add a bad release to `security/known_bad_packages.yaml` the moment an advisory lands.
 
+## 2c. Independent verification (operator reference)
+
+A task reaches `done` only after `complete_task` passes every layer below; `promptwise spec complete` and the MCP result report which independent layers backed the acceptance (`independence`).
+
+| Layer | Always on? | What it proves | Config |
+|---|---|---|---|
+| Frozen check files | yes | the check was not edited after the plan | - |
+| Grounded gate | yes (override: `spec.allow_ungrounded`) | a real test command ran | `verify.test_command` |
+| **Red before green** | yes | every acceptance check was seen to FAIL before the work existed (a check that already passes is rejected as vacuous) | per check: `expect_baseline` = `fail` (default) or `pass` (explicit regression guard) |
+| Mutation gate | opt-in | the tests detect injected faults | `verify.mutation_command` (exit 0 = the tool's own threshold met), `verify.mutation_timeout_seconds`, `spec.require_mutation` |
+| Independent reviewer | opt-in | a second party (another model, agent or human) approves | `verify.reviewer_command`, `verify.reviewer_timeout_seconds`, `spec.require_reviewer` |
+
+**Reviewer contract:** the command reads one JSON document on stdin — `{spec_id, task_id, requirements:[{id,text}], evidence, checks:[{requirement_id, command, baseline, passed}]}` — and prints `{"approved": true|false, "reasons": [str]}`. Anything else (non-zero exit, timeout, missing program, malformed JSON, non-boolean `approved`) is a rejection. Reasons are capped at 10 x 300 characters and are returned to the agent as untrusted data. Core never calls an LLM; wire the command to whatever model or process you trust.
+
+**Trust:** `mutation_command` and `reviewer_command` run with the gateway's privileges, so they are read only from operator config (over MCP, a project can never set them; only pre-approved `test_command`/`lint_command` strings are honoured). Set `spec.require_mutation` / `spec.require_reviewer` in the operator file to make the layer mandatory; a project cannot satisfy a required reviewer with its own command.
+
 ## 3. Support bundle
 
 `promptwise support-bundle [--out path.zip]` → `generate_support_bundle()`. Collects:

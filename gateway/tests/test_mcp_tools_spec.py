@@ -109,3 +109,58 @@ async def test_spec_tools_are_registered_enabled_and_pinned(operator):
     assert expected <= set(specs)
     for name, (desc, schema) in specs.items():
         assert registry[name].enabled and registry[name].description_sha256 == tool_description_hash(desc, schema), name
+
+
+def _red_check(operator):
+    (operator / "check_a.py").write_text("import sys, pathlib\nsys.exit(0 if pathlib.Path('a.done').exists() else 1)\n", encoding="utf-8")
+    (operator / ".promptwise" / "config.yaml").write_text("verify:\n  test_command: 'python -c \"pass\"'\n", encoding="utf-8")
+
+
+def _append_operator(operator, text):
+    path = operator.parent / f"{operator.name}-operator.yaml"
+    path.write_text(path.read_text(encoding="utf-8") + text, encoding="utf-8")
+
+
+async def _red_task(operator):
+    _red_check(operator)
+    spec = await _call("specify_feature", {"request": "a", "requirements": ["The system shall do A."]})
+    sid = spec["spec_id"]
+    await _call("plan_feature", {"spec_id": sid, "approach": "x"})
+    made = await _call("tasks_feature", {
+        "spec_id": sid, "tasks": [{"id": "t1", "requirement_ids": ["R1"]}],
+        "checks": [{"requirement_id": "R1", "command": "python check_a.py", "files": ["check_a.py"]}],
+    })
+    assert "error" not in made, made  # default expect_baseline is "fail": the check is genuinely red
+    (operator / "a.done").write_text("x", encoding="utf-8")
+    return sid
+
+
+async def test_a_vacuous_check_is_refused_over_mcp(operator):
+    (operator / "check_a.py").write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
+    spec = await _call("specify_feature", {"request": "a", "requirements": ["The system shall do A."]})
+    await _call("plan_feature", {"spec_id": spec["spec_id"], "approach": "x"})
+    result = await _call("tasks_feature", {
+        "spec_id": spec["spec_id"], "tasks": [{"id": "t1", "requirement_ids": ["R1"]}],
+        "checks": [{"requirement_id": "R1", "command": "python check_a.py", "files": ["check_a.py"]}],
+    })
+    assert "already passes before implementation" in result["error"]
+
+
+async def test_reviewer_notes_come_back_wrapped_as_untrusted(operator):
+    (operator / "reject.py").write_text("import json, sys\nsys.stdin.read()\nprint(json.dumps({'approved': False, 'reasons': ['missing empty-input case']}))\n", encoding="utf-8")
+    _append_operator(operator, "verify:\n  reviewer_command: 'python reject.py'\n")
+    sid = await _red_task(operator)
+    result = await _call("complete_task", {"spec_id": sid, "task_id": "t1", "evidence": "e"})
+    assert result["accepted"] is False and result["reasons"] == ["reviewer_rejected"]
+    assert result["notes"][0].startswith('<untrusted source="reviewer">') and "missing empty-input case" in result["notes"][0]
+
+
+async def test_a_project_cannot_supply_its_own_reviewer_when_the_operator_requires_one(operator):
+    _append_operator(operator, "spec:\n  require_reviewer: true\n")
+    (operator / "approve.py").write_text("import json, sys\nsys.stdin.read()\nprint(json.dumps({'approved': True}))\n", encoding="utf-8")
+    sid = await _red_task(operator)
+    (operator / ".promptwise" / "config.yaml").write_text(
+        "verify:\n  test_command: 'python -c \"pass\"'\n  reviewer_command: 'python approve.py'\n", encoding="utf-8"
+    )
+    result = await _call("complete_task", {"spec_id": sid, "task_id": "t1", "evidence": "e"})
+    assert result["accepted"] is False and result["reasons"] == ["reviewer_not_configured"]

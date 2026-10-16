@@ -46,6 +46,16 @@ def run_tests(config: dict[str, Any], cwd: Path | None = None) -> ToolRunResult:
     return run_command("tests", command, cwd, max_output_chars=max_output_chars)
 
 
+def run_mutation(config: dict[str, Any], cwd: Path | None = None) -> ToolRunResult:
+    """Operator-supplied mutation-testing command. Exit 0 means the tool's own score threshold was met;
+    core never parses scores. Blank = not configured (skipped, ran=False)."""
+    verify = config.get("verify", {})
+    return run_command(
+        "mutation", verify.get("mutation_command", ""), cwd,
+        timeout=int(verify.get("mutation_timeout_seconds", 1800)), max_output_chars=verify.get("max_output_chars", 4000),
+    )
+
+
 def run_lint(config: dict[str, Any], cwd: Path | None = None) -> ToolRunResult:
     command = config.get("verify", {}).get("lint_command", "")
     max_output_chars = config.get("verify", {}).get("max_output_chars", 4000)

@@ -27,6 +27,8 @@ spec:
   check_timeout_seconds: 300
   allow_fileless_checks: false
   enforce_command_policy: true
+  require_mutation: false
+  require_reviewer: false
 security:
   known_bad_packages_path: security/known_bad_packages.yaml
   lockfile_path: requirements.lock
@@ -48,3 +50,7 @@ verify:
   max_identical_failures: 3
   failure_ledger_path: .promptwise/failure_ledger.json
   max_output_chars: 4000
+  mutation_command: ""
+  mutation_timeout_seconds: 1800
+  reviewer_command: ""
+  reviewer_timeout_seconds: 300

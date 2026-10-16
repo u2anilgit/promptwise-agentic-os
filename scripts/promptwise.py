@@ -129,9 +129,12 @@ def spec_complete(spec_id: str, task_id: str, evidence: str = typer.Option(..., 
     result = _spec_run(lambda: engine.complete_task(spec_id, task_id, evidence, cwd=cwd))
     if result.accepted:
         grounded = "grounded" if result.verify and result.verify.grounded else "ungrounded (allowed by config)"
-        typer.echo(f"accepted task {task_id} ({grounded})")
+        layers = [name for name, on in result.independence.items() if on]
+        typer.echo(f"accepted task {task_id} ({grounded}; independent layers: {', '.join(layers) or 'none'})")
         return
     typer.echo(f"rejected task {task_id}: {', '.join(result.reasons)}")
+    for note in result.notes:
+        typer.echo(f"  reviewer: {note}")
     raise typer.Exit(code=1)
 
 

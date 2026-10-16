@@ -33,6 +33,7 @@ from core.spec import store
 from core.spec.ears import validate_ears
 from core.verify.gate import verify_output
 from core.verify.models import VerifyResult
+from core.verify.reviewer import run_reviewer
 from core.verify.runners import run_command
 from core.spec.models import (
     AcceptanceCheck,
@@ -292,6 +293,7 @@ class CompletionResult(BaseModel):
     reasons: list[str] = []
     verify: VerifyResult | None = None
     independence: dict[str, bool] = {}
+    notes: list[str] = []  # reviewer reasons (operator-supplied text; treat as data)
 
 
 def _unchanged(base: Path, check: FrozenCheck) -> list[str]:
@@ -332,7 +334,7 @@ def complete_task(
     work = Path(cwd) if cwd else base
 
     with session_scope(config, root) as session:
-        _require_stage(session, spec_id, ("tasked", "implementing"), "complete_task")
+        spec = _require_stage(session, spec_id, ("tasked", "implementing"), "complete_task")
         records = {t.task_id: t for t in store.get_tasks(session, spec_id)}
         if task_id not in records:
             raise ValueError(f"unknown task '{task_id}' for spec '{spec_id}'")
@@ -342,9 +344,9 @@ def complete_task(
     if task.status == "done":
         return CompletionResult(task_id=task_id, accepted=True, status="done")
 
-    def reject(reasons: list[str], verify: VerifyResult | None = None, extra: dict[str, Any] | None = None) -> CompletionResult:
+    def reject(reasons: list[str], verify: VerifyResult | None = None, extra: dict[str, Any] | None = None, notes: list[str] | None = None) -> CompletionResult:
         _audit(config, "complete_task", spec_id, {"task_id": task_id, "reasons": reasons, **(extra or {})}, result="deny")
-        return CompletionResult(task_id=task_id, accepted=False, status=task.status, reasons=reasons, verify=verify)
+        return CompletionResult(task_id=task_id, accepted=False, status=task.status, reasons=reasons, verify=verify, notes=notes or [])
 
     if any(records[d].status != "done" for d in task.depends_on if d in records):
         return reject(["dependency_not_done"])
@@ -385,10 +387,29 @@ def complete_task(
     if not verify.grounded and not _spec_setting(config, "allow_ungrounded", False):
         return reject(["ungrounded_verification"], verify)
 
+    if _spec_setting(config, "require_mutation", False) and not verify.mutation_passed:
+        return reject(["mutation_not_run"], verify)
+
+    reviewer_approved = False
+    if _spec_setting(config, "require_reviewer", False) and not (config.get("verify", {}).get("reviewer_command") or "").strip():
+        return reject(["reviewer_not_configured"], verify)
+    payload = {
+        "spec_id": spec_id, "task_id": task_id, "evidence": evidence[:20000],
+        "requirements": [{"id": r.id, "text": r.text} for r in spec.requirements if r.id in task.requirement_ids],
+        "checks": [{"requirement_id": c.requirement_id, "command": c.command, "baseline": c.baseline, "passed": True} for c in task_checks],
+    }
+    verdict = run_reviewer(config, work, payload)
+    if verdict.ran:
+        if verdict.error:
+            return reject(["reviewer_failed"], verify, extra={"reviewer_error": verdict.error}, notes=[verdict.error])
+        if not verdict.approved:
+            return reject(["reviewer_rejected"], verify, extra={"reviewer_reasons": verdict.reasons}, notes=verdict.reasons)
+        reviewer_approved = True
+
     with session_scope(config, root) as session:
         store.set_task_status(session, spec_id, task_id, "done")
         store.set_stage(session, spec_id, "implementing")
-    independence = {"baseline_red": all(c.baseline == "failed" for c in task_checks), "mutation": False, "reviewer": False}
+    independence = {"baseline_red": all(c.baseline == "failed" for c in task_checks), "mutation": verify.mutation_passed, "reviewer": reviewer_approved}
     _audit(config, "complete_task", spec_id, {"task_id": task_id, "grounded": verify.grounded, "checks": [c.requirement_id for c in task_checks], "independence": independence})
     return CompletionResult(task_id=task_id, accepted=True, status="done", verify=verify, independence=independence)
 

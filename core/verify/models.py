@@ -29,3 +29,5 @@ class VerifyResult(BaseModel):
     # True iff a configured test command actually ran. A pass with grounded=False
     # is vacuous (nothing was tested) and must not be treated as proof of correctness.
     grounded: bool = False
+    # True iff an operator-configured mutation command ran and passed (an independent check on test quality).
+    mutation_passed: bool = False

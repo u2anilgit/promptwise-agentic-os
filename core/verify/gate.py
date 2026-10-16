@@ -19,7 +19,7 @@ from typing import Any
 from core.config.resolve import resolve_config_auto
 from core.verify.ledger import record_failure, record_success
 from core.verify.models import VerifyResult
-from core.verify.runners import run_lint, run_tests
+from core.verify.runners import run_lint, run_mutation, run_tests
 from core.verify.security import run_gitleaks, run_semgrep
 
 
@@ -54,6 +54,11 @@ def verify_output(
 
     results = [test_result, lint_result, semgrep_result, gitleaks_result]
 
+    # Mutation testing is slow: only spend it on a change whose tests already pass.
+    mutation_result = run_mutation(config, cwd) if test_result.passed else None
+    if mutation_result is not None and mutation_result.ran:
+        results.append(mutation_result)
+
     lint_blocks = bool(config.get("verify", {}).get("lint_blocks", False))
     blocking_failures = []
     if not test_result.passed:
@@ -64,6 +69,8 @@ def verify_output(
         blocking_failures.append("semgrep found blocking (error-severity) findings")
     if not gitleaks_result.passed:
         blocking_failures.append("gitleaks detected a secret")
+    if mutation_result is not None and mutation_result.ran and not mutation_result.passed:
+        blocking_failures.append("mutation testing failed (tests did not catch the injected faults)")
 
     passed = len(blocking_failures) == 0
     blocked_reason = "; ".join(blocking_failures) if blocking_failures else None
@@ -75,4 +82,6 @@ def verify_output(
         else:
             retry_loop_broken = record_failure(config, ledger_key, _signature(results))
 
-    return VerifyResult(passed=passed, results=results, blocked_reason=blocked_reason, retry_loop_broken=retry_loop_broken, grounded=test_result.ran)
+    return VerifyResult(passed=passed, results=results, blocked_reason=blocked_reason, retry_loop_broken=retry_loop_broken, grounded=test_result.ran,
+        mutation_passed=bool(mutation_result is not None and mutation_result.ran and mutation_result.passed),
+    )

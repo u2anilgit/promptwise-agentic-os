@@ -101,3 +101,24 @@ def test_tasks_with_a_missing_or_malformed_json_file_is_a_clean_error(proj):
     (proj / "bad.json").write_text("{not json", encoding="utf-8")
     bad = runner.invoke(app, ["spec", "tasks", spec_id, "--tasks", "bad.json", "--checks", "checks.json"])
     assert bad.exit_code == 2 and "error:" in bad.stdout and "Traceback" not in bad.stdout
+
+
+def test_complete_reports_independence_layers_and_reviewer_notes(proj):
+    (proj / "check_a.py").write_text("import sys, pathlib\nsys.exit(0 if pathlib.Path('a.done').exists() else 1)\n", encoding="utf-8")
+    (proj / "reject.py").write_text("import json, sys\nsys.stdin.read()\nprint(json.dumps({'approved': False, 'reasons': ['needs a null case']}))\n", encoding="utf-8")
+    (proj / "one_task.json").write_text(json.dumps([{"id": "t1", "requirement_ids": ["R1"]}]), encoding="utf-8")
+    (proj / "one_check.json").write_text(json.dumps([{"requirement_id": "R1", "command": "python check_a.py", "files": ["check_a.py"]}]), encoding="utf-8")
+    spec_id = _specify_one()
+    assert runner.invoke(app, ["spec", "plan", spec_id, "a"]).exit_code == 0
+    made = runner.invoke(app, ["spec", "tasks", spec_id, "--tasks", "one_task.json", "--checks", "one_check.json"])
+    assert made.exit_code == 0, made.stdout
+    (proj / "a.done").write_text("x", encoding="utf-8")
+    ok = runner.invoke(app, ["spec", "complete", spec_id, "t1", "--evidence", "e"])
+    assert ok.exit_code == 0 and "independent layers: baseline_red" in ok.stdout, ok.stdout
+    status = runner.invoke(app, ["spec", "status", spec_id])
+    assert "check R1: baseline failed (expect fail)" in status.stdout
+
+
+def _specify_one():
+    result = runner.invoke(app, ["spec", "specify", "a", "-r", "The system shall do A."])
+    return next(line.split()[-1] for line in result.stdout.splitlines() if line.startswith("spec_id"))

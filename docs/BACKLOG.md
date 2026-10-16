@@ -332,6 +332,13 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 - [ ] Locked/tested set diverges from the earlier dev environment (`fastapi 0.115.12`); the suite passes on both, but only the lock set is the supported one.
 - [ ] Re-lock cadence: schedule a periodic `--upgrade` + full-suite validation and an advisory check against `security/known_bad_packages.yaml`.
 
+### From independent-verification build, 2026-10-17
+
+- [ ] Ship a reference reviewer wrapper (a script that calls a chosen second model) and a reference mutation-tool wrapper as documented examples under `docs/` or a pack; core deliberately bundles neither.
+- [ ] `expect_baseline='pass'` guards are an author-chosen escape hatch: consider requiring operator approval (or a distinct audit flag in the dashboard) for guards on specs that touch new behaviour.
+- [ ] Baseline runs execute the check once at freeze time; flaky checks (pass/fail varies) are not detected. Consider N-run stability checks.
+- [ ] Reviewer verdicts are not signed or tied to the diff hash; add `evidence_sha256` to the payload/verdict for replay protection.
+
 ## Resolved
 
 - [x] Pack-loader foundation itself (schema/loader/registry/CLI/doctor wiring, `intelligence` pack kind) — `docs/superpowers/plans/2026-08-24-pack-loader-foundation.md`, merged `aa9cf4a` 2026-08-24.
