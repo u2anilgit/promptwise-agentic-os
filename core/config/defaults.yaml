@@ -29,6 +29,7 @@ spec:
   enforce_command_policy: true
   require_mutation: false
   require_reviewer: false
+  allow_regression_guards: true
 security:
   known_bad_packages_path: security/known_bad_packages.yaml
   lockfile_path: requirements.lock

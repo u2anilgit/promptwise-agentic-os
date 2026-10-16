@@ -336,8 +336,10 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 
 - [ ] Ship a reference reviewer wrapper (a script that calls a chosen second model) and a reference mutation-tool wrapper as documented examples under `docs/` or a pack; core deliberately bundles neither.
 - [ ] `expect_baseline='pass'` guards are an author-chosen escape hatch: consider requiring operator approval (or a distinct audit flag in the dashboard) for guards on specs that touch new behaviour.
-- [ ] Baseline runs execute the check once at freeze time; flaky checks (pass/fail varies) are not detected. Consider N-run stability checks.
-- [ ] Reviewer verdicts are not signed or tied to the diff hash; add `evidence_sha256` to the payload/verdict for replay protection.
+- [x] FIXED (adversarial review): baselines run twice and must agree, reject tree-writing checks, distinguish missing program/timeout from a real failure, forbid-able guards, reviewer cwd/payload hardening, bounded reviewer output.
+- [ ] Residual: a red check can still keep arming state outside the project tree; the tree-watch skips trees over 50k files (silently weaker) and ignores cache dirs; consider running baselines in a throwaway copy of the tree.
+- [ ] Reviewer verdicts are not signed or bound to the verdict's own evidence hash (the payload carries `evidence_sha256`, but the reviewer need not echo it); no tree digest is sent. Mutation and reviewer commands are not routed through `check_policy` (operator-defined) and the reviewer inherits the gateway's full environment by design (it may need model API keys).
+- [ ] Most legacy tests use `expect_baseline='pass'` fixtures (explicit guards); the default red-first path has dedicated tests but consider converting more fixtures.
 
 ## Resolved
 

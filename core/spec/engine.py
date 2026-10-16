@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shlex
 import time
 import uuid
@@ -193,22 +194,76 @@ def _check_file(base: Path, relative: str, requirement_id: str) -> Path:
     return path
 
 
-def _observe_baseline(check: FrozenCheck, base: Path, config: dict[str, Any]) -> FrozenCheck:
-    """Run the check once before the work exists. A check that cannot fail proves nothing."""
+_TREE_IGNORED = {".git", ".venv", "venv", "node_modules", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".promptwise"}
+_TREE_MAX_FILES = 50_000
+
+
+def _tree_state(base: Path) -> dict[str, tuple[int, int]] | None:
+    """(size, mtime_ns) of every project file outside well-known cache/VCS dirs; None if the tree is too big to watch."""
+    state: dict[str, tuple[int, int]] = {}
+    for dirpath, dirnames, filenames in os.walk(base):
+        dirnames[:] = [d for d in dirnames if d not in _TREE_IGNORED]
+        for name in filenames:
+            path = Path(dirpath) / name
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            state[path.relative_to(base).as_posix()] = (stat.st_size, stat.st_mtime_ns)
+            if len(state) > _TREE_MAX_FILES:
+                return None
+    return state
+
+
+def _refuse_baseline(config: dict[str, Any], spec_id: str, rid: str, reason: str) -> None:
+    _audit(config, "baseline_rejected", spec_id, {"requirement_id": rid, "reason": reason}, result="deny")
+    raise ValueError(reason)
+
+
+def _observe_baseline(check: FrozenCheck, base: Path, config: dict[str, Any], spec_id: str) -> FrozenCheck:
+    """Run the check before the work exists. A check that cannot fail proves nothing.
+
+    'baseline_red' therefore means: the command ran properly (not missing, not timed out), FAILED on two
+    consecutive runs, and wrote nothing to the project tree. It cannot rule out a check that keeps its state
+    somewhere core cannot see; the reviewer hook and mutation gate exist for that residual risk."""
     rid = check.requirement_id
+    timeout = int(_spec_setting(config, "check_timeout_seconds", 300))
+    if check.expect_baseline == "pass" and not _spec_setting(config, "allow_regression_guards", True):
+        _refuse_baseline(config, spec_id, rid, f"acceptance check for requirement '{rid}': regression guards are not allowed by the operator (spec.allow_regression_guards is false); write a check that fails before the work exists")
     if _spec_setting(config, "enforce_command_policy", True):
         action = _command_action(check.command, base)
         if not check_policy(action, config).allowed:
-            raise ValueError(f"baseline run of the check for requirement '{rid}' was denied by policy ({action})")
-    outcome = run_command(f"baseline:{rid}", check.command, base, timeout=int(_spec_setting(config, "check_timeout_seconds", 300)))
-    observed = "passed" if (outcome.ran and outcome.passed) else "failed"
+            _refuse_baseline(config, spec_id, rid, f"baseline run of the check for requirement '{rid}' was denied by policy ({action})")
+
+    def run_once() -> str:
+        outcome = run_command(f"baseline:{rid}", check.command, base, timeout=timeout)
+        if outcome.error_kind == "timeout":
+            _refuse_baseline(config, spec_id, rid, f"baseline run of the check for requirement '{rid}' timed out after {timeout}s; a check must finish on its own and may not wait for something the work will provide later")
+        if outcome.error_kind:
+            _refuse_baseline(config, spec_id, rid, f"baseline run of the check for requirement '{rid}' could not be executed ({outcome.error_kind}): fix the command; a missing program is not a failing test")
+        return "passed" if outcome.passed else "failed"
+
+    if check.expect_baseline == "fail":
+        before = _tree_state(base)
+        first, second = run_once(), run_once()
+        after = _tree_state(base)
+        if before is not None and after is not None and before != after:
+            touched = sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k))[:3]
+            _refuse_baseline(config, spec_id, rid, f"acceptance check for requirement '{rid}' wrote to the project tree during its baseline run ({', '.join(touched)}); a check must be read-only")
+        if first != second:
+            _refuse_baseline(config, spec_id, rid, f"acceptance check for requirement '{rid}' is unstable: it gave different results on two consecutive runs before any work was done")
+        observed = first
+    else:
+        observed = run_once()
+
     if check.expect_baseline == "fail" and observed == "passed":
-        raise ValueError(
+        _refuse_baseline(
+            config, spec_id, rid,
             f"acceptance check for requirement '{rid}' already passes before implementation (it is vacuous or the "
-            "requirement is already satisfied); fix the check, or set expect_baseline='pass' if it guards behaviour that must keep working"
+            "requirement is already satisfied); fix the check, or set expect_baseline='pass' if it guards behaviour that must keep working",
         )
     if check.expect_baseline == "pass" and observed == "failed":
-        raise ValueError(f"acceptance check for requirement '{rid}' is declared a regression guard (expect_baseline='pass') but already fails; fix the check or the code first")
+        _refuse_baseline(config, spec_id, rid, f"acceptance check for requirement '{rid}' is declared a regression guard (expect_baseline='pass') but already fails; fix the check or the code first")
     return check.model_copy(update={"baseline": observed})
 
 
@@ -257,7 +312,7 @@ def tasks_feature(
             tasks = [TaskNode(id="T1", requirement_ids=[r.id for r in spec.requirements])]
 
         _validate_tasks(spec, tasks)
-        frozen = [_observe_baseline(f, base, config) for f in _freeze_checks(spec, checks, base, config)]
+        frozen = [_observe_baseline(f, base, config, spec_id) for f in _freeze_checks(spec, checks, base, config)]
 
         if stage == "specified":  # trivial path: auto-plan
             store.save_plan(session, PlanArtifact(spec_id=spec_id, approach="(trivial: auto-planned)", created_at=time.time(), requirements_sha256=requirements_hash(spec.requirements)))
@@ -282,6 +337,7 @@ def tasks_feature(
         "task_count": len(tasks),
         "unreferenced_check_files": _unreferenced_check_files(checks),
         "baselines": {f.requirement_id: f.baseline for f in frozen},
+        "expect_baselines": {f.requirement_id: f.expect_baseline for f in frozen},
     })
     return TasksResult(spec_id=spec_id, frozen=frozen, automated=automated)
 
@@ -319,6 +375,12 @@ def _command_action(command: str, base: Path) -> str:
         return "shell:run:" + (base / argv0).resolve().as_posix()
     name = Path(argv0).name
     return f"shell:run:{name[:-4] if name.lower().endswith('.exe') else name}"
+
+
+def _reviewer_file(base: Path, relative: str) -> dict[str, str]:
+    path = base / relative
+    data = path.read_bytes() if path.is_file() else b""
+    return {"path": relative, "sha256": hashlib.sha256(data).hexdigest(), "content": data[:20000].decode("utf-8", errors="replace")}
 
 
 def complete_task(
@@ -381,7 +443,7 @@ def complete_task(
     if failed:
         return reject(failed)
 
-    verify = verify_output(diff=evidence, spec=None, cwd=work, config=config, ledger_key=f"{spec_id}:{task_id}")
+    verify = verify_output(diff=evidence, spec=None, cwd=work, config=config, ledger_key=f"{spec_id}:{task_id}", independent_cwd=base)
     if not verify.passed:
         return reject(["verify_gate_failed"], verify)
     if not verify.grounded and not _spec_setting(config, "allow_ungrounded", False):
@@ -394,11 +456,16 @@ def complete_task(
     if _spec_setting(config, "require_reviewer", False) and not (config.get("verify", {}).get("reviewer_command") or "").strip():
         return reject(["reviewer_not_configured"], verify)
     payload = {
-        "spec_id": spec_id, "task_id": task_id, "evidence": evidence[:20000],
+        "spec_id": spec_id, "task_id": task_id, "evidence": evidence[:20000], "evidence_untrusted": True,
+        "evidence_sha256": hashlib.sha256(evidence.encode("utf-8")).hexdigest(),
         "requirements": [{"id": r.id, "text": r.text} for r in spec.requirements if r.id in task.requirement_ids],
-        "checks": [{"requirement_id": c.requirement_id, "command": c.command, "baseline": c.baseline, "passed": True} for c in task_checks],
+        "checks": [
+            {"requirement_id": c.requirement_id, "command": c.command, "baseline": c.baseline, "passed": True,
+             "files": [_reviewer_file(base, f) for f in c.files]}
+            for c in task_checks
+        ],
     }
-    verdict = run_reviewer(config, work, payload)
+    verdict = run_reviewer(config, base, payload)  # the project root, never an agent-chosen directory
     if verdict.ran:
         if verdict.error:
             return reject(["reviewer_failed"], verify, extra={"reviewer_error": verdict.error}, notes=[verdict.error])
@@ -410,7 +477,8 @@ def complete_task(
         store.set_task_status(session, spec_id, task_id, "done")
         store.set_stage(session, spec_id, "implementing")
     independence = {"baseline_red": all(c.baseline == "failed" for c in task_checks), "mutation": verify.mutation_passed, "reviewer": reviewer_approved}
-    _audit(config, "complete_task", spec_id, {"task_id": task_id, "grounded": verify.grounded, "checks": [c.requirement_id for c in task_checks], "independence": independence})
+    _audit(config, "complete_task", spec_id, {"task_id": task_id, "grounded": verify.grounded, "checks": [c.requirement_id for c in task_checks], "independence": independence,
+                                          "reviewer_reasons": verdict.reasons if reviewer_approved else []})
     return CompletionResult(task_id=task_id, accepted=True, status="done", verify=verify, independence=independence)
 
 
@@ -433,9 +501,13 @@ def amend_check(
     hashes: dict[str, str] = {}
     for f in new_check.files:
         hashes[f] = file_sha256(_check_file(base, f, requirement_id))
+    with session_scope(config, root) as session:  # validate BEFORE executing the agent's command
+        _require_stage(session, spec_id, ("tasked", "implementing", "verified"), "amend_check")
+        if not any(c.requirement_id == requirement_id for c in store.get_frozen_checks(session, spec_id)):
+            raise ValueError(f"no frozen check for requirement '{requirement_id}' of spec '{spec_id}'")
     new = _observe_baseline(
         FrozenCheck(requirement_id=requirement_id, command=new_check.command, files=list(new_check.files), file_hashes=hashes, expect_baseline=new_check.expect_baseline),
-        base, config,
+        base, config, spec_id,
     )
 
     with session_scope(config, root) as session:
@@ -452,6 +524,8 @@ def amend_check(
         "requirement_id": requirement_id, "reason": reason,
         "old_command": old.command, "new_command": new.command,
         "old_hashes": old.file_hashes, "new_hashes": new.file_hashes,
+        "old_expect_baseline": old.expect_baseline, "new_expect_baseline": new.expect_baseline,
+        "old_baseline": old.baseline, "new_baseline": new.baseline,
     })
     return new
 

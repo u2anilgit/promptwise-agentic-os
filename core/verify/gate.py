@@ -40,6 +40,7 @@ def verify_output(
     cwd: Path | None = None,
     config: dict[str, Any] | None = None,
     ledger_key: str | None = None,
+    independent_cwd: Path | None = None,
 ) -> VerifyResult:
     # Resolve the *target* project's config (`cwd`), not the calling
     # process's own cwd — an MCP caller runs inside the gateway process,
@@ -55,7 +56,7 @@ def verify_output(
     results = [test_result, lint_result, semgrep_result, gitleaks_result]
 
     # Mutation testing is slow: only spend it on a change whose tests already pass.
-    mutation_result = run_mutation(config, cwd) if test_result.passed else None
+    mutation_result = run_mutation(config, independent_cwd if independent_cwd is not None else cwd) if test_result.passed else None
     if mutation_result is not None and mutation_result.ran:
         results.append(mutation_result)
 

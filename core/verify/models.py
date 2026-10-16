@@ -19,6 +19,9 @@ class ToolRunResult(BaseModel):
     passed: bool
     output: str
     findings: list[VerifyFinding] = []
+    # Set when the command could not be run properly (as opposed to running and failing):
+    # 'not_found', 'timeout' or 'parse'. A caller must never read these as a meaningful test failure.
+    error_kind: str | None = None
 
 
 class VerifyResult(BaseModel):

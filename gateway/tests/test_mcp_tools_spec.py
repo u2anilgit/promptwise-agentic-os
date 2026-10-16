@@ -164,3 +164,15 @@ async def test_a_project_cannot_supply_its_own_reviewer_when_the_operator_requir
     )
     result = await _call("complete_task", {"spec_id": sid, "task_id": "t1", "evidence": "e"})
     assert result["accepted"] is False and result["reasons"] == ["reviewer_not_configured"]
+
+
+async def test_the_operators_reviewer_wins_over_a_project_supplied_one(operator):
+    (operator / "reject.py").write_text("import json, sys\nsys.stdin.read()\nprint(json.dumps({'approved': False, 'reasons': ['no']}))\n", encoding="utf-8")
+    (operator / "approve.py").write_text("import json, sys\nsys.stdin.read()\nprint(json.dumps({'approved': True}))\n", encoding="utf-8")
+    _append_operator(operator, "verify:\n  reviewer_command: 'python reject.py'\n")
+    sid = await _red_task(operator)
+    (operator / ".promptwise" / "config.yaml").write_text(
+        "verify:\n  test_command: 'python -c \"pass\"'\n  reviewer_command: 'python approve.py'\n", encoding="utf-8"
+    )
+    result = await _call("complete_task", {"spec_id": sid, "task_id": "t1", "evidence": "e"})
+    assert result["accepted"] is False and result["reasons"] == ["reviewer_rejected"]

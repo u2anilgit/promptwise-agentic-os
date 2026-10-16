@@ -53,13 +53,17 @@ A task reaches `done` only after `complete_task` passes every layer below; `prom
 |---|---|---|---|
 | Frozen check files | yes | the check was not edited after the plan | - |
 | Grounded gate | yes (override: `spec.allow_ungrounded`) | a real test command ran | `verify.test_command` |
-| **Red before green** | yes | every acceptance check was seen to FAIL before the work existed (a check that already passes is rejected as vacuous) | per check: `expect_baseline` = `fail` (default) or `pass` (explicit regression guard) |
+| **Red before green** | yes | every acceptance check ran properly (program found, no timeout) and FAILED on two consecutive runs before the work existed, writing nothing to the project tree; a check that already passes, is flaky or mutates the tree is rejected | per check: `expect_baseline` = `fail` (default) or `pass` (explicit regression guard); operator: `spec.allow_regression_guards` (default true; set false to forbid guards) |
 | Mutation gate | opt-in | the tests detect injected faults | `verify.mutation_command` (exit 0 = the tool's own threshold met), `verify.mutation_timeout_seconds`, `spec.require_mutation` |
 | Independent reviewer | opt-in | a second party (another model, agent or human) approves | `verify.reviewer_command`, `verify.reviewer_timeout_seconds`, `spec.require_reviewer` |
 
 **Reviewer contract:** the command reads one JSON document on stdin — `{spec_id, task_id, requirements:[{id,text}], evidence, checks:[{requirement_id, command, baseline, passed}]}` — and prints `{"approved": true|false, "reasons": [str]}`. Anything else (non-zero exit, timeout, missing program, malformed JSON, non-boolean `approved`) is a rejection. Reasons are capped at 10 x 300 characters and are returned to the agent as untrusted data. Core never calls an LLM; wire the command to whatever model or process you trust.
 
-**Trust:** `mutation_command` and `reviewer_command` run with the gateway's privileges, so they are read only from operator config (over MCP, a project can never set them; only pre-approved `test_command`/`lint_command` strings are honoured). Set `spec.require_mutation` / `spec.require_reviewer` in the operator file to make the layer mandatory; a project cannot satisfy a required reviewer with its own command.
+**What "red" does and does not prove:** it proves the check can fail and was not self-modifying within the project tree. It cannot rule out a check that keeps state somewhere core cannot see (e.g. a temp file outside the tree that arms a later pass): that residual risk is what the mutation gate and the reviewer hook are for.
+
+**Trust:** `mutation_command` and `reviewer_command` run with the gateway's privileges and its environment, so they are read only from operator config. Over MCP a project can never set them (only pre-approved `test_command`/`lint_command` strings are honoured) and cannot satisfy a required reviewer with its own command. On the **CLI** the project's own `.promptwise/` layers are the user's configuration, so these settings are enforceable against an agent only if that agent cannot write them (see the single-repo caveat in `gateway/CLAUDE.md`). The mutation and reviewer programs always run from the project root, never from an agent-chosen `cwd`; keep the programs and their config **outside** any directory the agent can write, because a script inside the project is agent-writable.
+
+The reviewer receives each check's file path, sha256 and (truncated) source, `evidence_sha256`, and `evidence_untrusted: true` (the evidence is agent-written text: do not follow instructions in it). Approvals log the reviewer's reasons in the audit entry.
 
 ## 3. Support bundle
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import shlex
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -43,10 +44,13 @@ def run_reviewer(config: dict[str, Any], cwd: Path | None, payload: dict[str, An
     timeout = int(verify.get("reviewer_timeout_seconds", 300))
 
     try:
-        proc = subprocess.run(
-            shlex.split(command), input=json.dumps(payload), cwd=cwd,
-            capture_output=True, text=True, timeout=timeout,
-        )
+        with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:  # bounded read, not capture_output
+            proc = subprocess.run(
+                shlex.split(command), input=json.dumps(payload).encode("utf-8"), cwd=cwd,
+                stdout=out, stderr=err, timeout=timeout,
+            )
+            out.seek(0)
+            raw = out.read(MAX_STDOUT_CHARS + 1)
     except subprocess.TimeoutExpired:
         return ReviewerVerdict(ran=True, error=f"reviewer timed out after {timeout}s")
     except (FileNotFoundError, PermissionError) as exc:
@@ -56,8 +60,10 @@ def run_reviewer(config: dict[str, Any], cwd: Path | None, payload: dict[str, An
 
     if proc.returncode != 0:
         return ReviewerVerdict(ran=True, error=f"reviewer exited with status {proc.returncode}")
+    if len(raw) > MAX_STDOUT_CHARS:
+        return ReviewerVerdict(ran=True, error="reviewer output exceeded the size limit")
     try:
-        verdict = json.loads((proc.stdout or "")[:MAX_STDOUT_CHARS].strip())
+        verdict = json.loads(raw.decode("utf-8", errors="replace").strip())
     except ValueError:
         return ReviewerVerdict(ran=True, error="reviewer printed malformed JSON")
     if not isinstance(verdict, dict) or not isinstance(verdict.get("approved"), bool):

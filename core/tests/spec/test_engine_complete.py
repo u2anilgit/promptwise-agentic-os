@@ -123,8 +123,9 @@ def test_a_failing_verify_gate_rejects_the_task(project):
 
 def test_a_hanging_check_times_out_without_raising(project):
     project[1]["spec"]["check_timeout_seconds"] = 1
-    spec_id = _tasked(project, pre=lambda tmp: (tmp / "check_login.py").write_text("import time\ntime.sleep(60)\n", encoding="utf-8"),
+    spec_id = _tasked(project, pre=lambda tmp: (tmp / "check_login.py").write_text("import sys, pathlib, time\nif not pathlib.Path('go.flag').exists():\n    sys.exit(1)\ntime.sleep(60)\n", encoding="utf-8"),
                       check_list=checks(("R1", "check_login.py", "fail"), ("R2", "check_logout.py")))
+    (project[0] / "go.flag").write_text("x", encoding="utf-8")
     started = time.monotonic()
     result = _complete(project, spec_id, "t1")
     assert time.monotonic() - started < 20

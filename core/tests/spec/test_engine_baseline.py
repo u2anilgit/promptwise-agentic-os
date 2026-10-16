@@ -72,15 +72,6 @@ def test_a_declared_regression_guard_that_already_fails_is_rejected(project):
         tasks_feature(spec_id, _tasks(), [_chk(expect_baseline="pass")], config=config, root=tmp)
 
 
-def test_a_hanging_check_counts_as_a_failed_baseline(project):
-    tmp, config = _red_project(project)
-    config["spec"]["check_timeout_seconds"] = 1
-    (tmp / "check_a.py").write_text("import time\ntime.sleep(60)\n", encoding="utf-8")
-    spec_id = _planned(tmp, config)
-    result = tasks_feature(spec_id, _tasks(), [_chk()], config=config, root=tmp)
-    assert [c.baseline for c in result.frozen] == ["failed"]
-
-
 def test_baseline_commands_are_policy_gated(project):
     tmp, config = _red_project(project)
     (tmp / "policies" / "allow.yaml").write_text("rules: []\n", encoding="utf-8")
