@@ -3,6 +3,8 @@ import { ApiError, apiGet } from "../../api/client";
 import type { components } from "../../api/schema";
 import { streamAudit, type AuditRecord, type FeedState } from "../../api/sse";
 import { Badge } from "../../components/ui";
+import { explainAction } from "../../explain";
+import { useMode } from "../../mode";
 
 type AuditResponse = components["schemas"]["AuditResponse"];
 type Chain = components["schemas"]["ChainStatus"];
@@ -30,6 +32,7 @@ const FEED_LABEL: Record<FeedState, string> = {
 };
 
 export function AuditView({ onSignedOut, chainPollMs = 15000 }: { onSignedOut?: () => void; chainPollMs?: number }) {
+  const { mode } = useMode();
   const [actionInput, setActionInput] = useState("");
   const [action, setAction] = useState("");
   const [result, setResult] = useState("");
@@ -148,10 +151,12 @@ export function AuditView({ onSignedOut, chainPollMs = 15000 }: { onSignedOut?: 
               <tr key={r.id} className="border-t align-top">
                 <td className="p-2 break-all">{r.timestamp}</td>
                 <td className="p-2 break-all">{r.actor}</td>
-                <td className="p-2 break-all">{r.action}</td>
+                <td className="p-2 break-all" title={mode === "builder" ? r.action : undefined}>
+                  {(mode === "builder" && explainAction(r.action, r.result)) || r.action}
+                </td>
                 <td className="p-2 break-all">
                   {r.target}
-                  {Object.keys(r.detail).length > 0 && (
+                  {mode === "pro" && Object.keys(r.detail).length > 0 && (
                     <details className="mt-1 text-xs text-slate-600">
                       <summary className="cursor-pointer">detail</summary>
                       <pre className="whitespace-pre-wrap break-all">{JSON.stringify(r.detail, null, 2)}</pre>

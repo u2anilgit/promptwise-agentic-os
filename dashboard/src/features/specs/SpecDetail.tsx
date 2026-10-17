@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { ApiError, apiGet } from "../../api/client";
 import type { components } from "../../api/schema";
 import { Badge, type Tone } from "../../components/ui";
+import { explainReason } from "../../explain";
+import { useMode } from "../../mode";
 
 type SpecStatus = components["schemas"]["SpecStatus"];
 type AuditRecord = components["schemas"]["AuditRecord"];
@@ -60,6 +62,7 @@ interface Props {
 const RESULT_TONE: Record<string, Tone> = { allow: "pass", deny: "block", error: "warn" };
 
 export function SpecDetail({ specId, onBack, onSignedOut }: Props) {
+  const { mode } = useMode();
   const encoded = encodeURIComponent(specId);
   const spec = useQuery({
     queryKey: ["spec", specId],
@@ -182,9 +185,9 @@ export function SpecDetail({ specId, onBack, onSignedOut }: Props) {
                 {r.actor !== ENGINE && <Badge tone="warn">not from the spec engine</Badge>}
               </div>
               {reasonsOf(r).map((reason, index) => (
-                <div key={`${index}-${reason}`} className="break-all text-status-block">{reason}</div>
+                <div key={`${index}-${reason}`} className="break-all text-status-block">{mode === "builder" ? explainReason(reason) : reason}</div>
               ))}
-              {Object.keys(r.detail).length > 0 && (
+              {mode === "pro" && Object.keys(r.detail).length > 0 && (
                 <details className="text-xs text-slate-600">
                   <summary className="cursor-pointer">detail</summary>
                   <pre className="whitespace-pre-wrap break-all">{JSON.stringify(r.detail, null, 2)}</pre>

@@ -4,6 +4,7 @@ export type Route =
   | { name: "audit" }
   | { name: "diagnostics" }
   | { name: "specs" }
+  | { name: "cost" }
   | { name: "spec"; id: string };
 
 // Spec ids are short server-generated tokens. Anything else (dots, slashes, spaces, long strings) is not a
@@ -16,6 +17,8 @@ export function parseRoute(hash: string): Route {
   switch (parts[0]) {
     case "diagnostics":
       return { name: "diagnostics" };
+    case "cost":
+      return { name: "cost" };
     case "specs": {
       if (parts.length < 2 || parts[1] === "") return { name: "specs" };
       try {
