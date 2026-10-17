@@ -1,13 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { ApiError, apiGet } from "../../api/client";
+import type { components } from "../../api/schema";
 import { Badge, type Tone } from "../../components/ui";
 
-interface Diagnostic {
-  name: string;
-  status: "PASS" | "WARN" | "FAIL";
-  message: string;
-}
+type Diagnostic = components["schemas"]["CheckResult"]; // generated from the gateway OpenAPI contract
 
 // The status is computed by core (`run_diagnostics`); the UI only maps it to a label and tone.
 const TONE: Record<Diagnostic["status"], Tone> = { PASS: "pass", WARN: "warn", FAIL: "block" };

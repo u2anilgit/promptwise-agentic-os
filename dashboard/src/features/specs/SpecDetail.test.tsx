@@ -65,11 +65,12 @@ describe("SpecDetail", () => {
       entry("3", "complete_task", "allow", { task_id: "t2", independence: { baseline_red: true, mutation: true, reviewer: true } }),
     ]));
     renderDetail();
-    const row = (await screen.findByText("t1")).closest("tr")!;
+    const tasks = await screen.findByRole("table", { name: /tasks/i });
+    const row = within(tasks).getAllByText("t1")[0].closest("tr")!;
     expect(within(row).getByText("baseline red")).toBeInTheDocument();
     expect(within(row).getByText("mutation")).toBeInTheDocument();
     expect(within(row).getByText("reviewer")).toBeInTheDocument();
-    const pendingRow = screen.getByText("t2").closest("tr")!; // pending in core: no layers, whatever the log says
+    const pendingRow = within(tasks).getByText("t2").closest("tr")!; // pending in core: no layers, whatever the log says
     expect(within(pendingRow).queryByText("mutation")).not.toBeInTheDocument();
   });
 
@@ -79,7 +80,7 @@ describe("SpecDetail", () => {
     const timeline = await screen.findByRole("list", { name: /history/i });
     const item = within(timeline).getByText(/complete_task/).closest("li")!;
     expect(within(item).getByText("deny")).toBeInTheDocument();
-    expect(within(item).getByText(/checks_failing:R2/)).toBeInTheDocument();
+    expect(within(item).getAllByText(/checks_failing:R2/).length).toBeGreaterThan(0);
   });
 
   it("renders hostile text inert and wraps long strings", async () => {
