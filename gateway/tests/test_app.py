@@ -1,8 +1,17 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from gateway.app import app
 
-client = TestClient(app)
+HEADERS = {"Authorization": "Bearer test-api-credential"}
+client = TestClient(app, headers=HEADERS)
+
+
+@pytest.fixture(autouse=True)
+def _api_credential(tmp_path, monkeypatch):
+    path = tmp_path / "api_credential"
+    path.write_text("test-api-credential", encoding="utf-8")
+    monkeypatch.setenv("PROMPTWISE_GATEWAY__TOKEN_PATH", str(path))
 
 
 def test_lifespan_writes_hardware_profile_on_boot(tmp_path, monkeypatch):

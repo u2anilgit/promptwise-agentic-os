@@ -2,7 +2,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 
 from core.config.resolve import resolve_config_auto
@@ -13,6 +13,8 @@ from core.routing.cost import CostRecord, cost_report
 from core.routing.router import RouteRequest, RoutingDecision, route_request
 from core.verify.gate import verify_output
 from core.verify.models import VerifyResult
+from gateway.api.v1 import router as api_v1
+from gateway.auth import require_token
 from gateway.healthcheck import is_alive
 
 
@@ -24,6 +26,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="PromptWise Agentic OS Gateway", version="0.1.0", lifespan=lifespan)
+app.include_router(api_v1)
+SECURED = [Depends(require_token)]
 
 
 @app.get("/healthz")
@@ -31,17 +35,17 @@ def healthz() -> dict[str, str]:
     return {"status": "ok" if is_alive() else "down"}
 
 
-@app.get("/diagnostics")
+@app.get("/diagnostics", dependencies=SECURED)
 def diagnostics() -> list[dict[str, str]]:
     return [result.model_dump() for result in run_diagnostics()]
 
 
-@app.post("/route", response_model=RoutingDecision)
+@app.post("/route", dependencies=SECURED, response_model=RoutingDecision)
 def route(request: RouteRequest) -> RoutingDecision:
     return route_request(request)
 
 
-@app.post("/cost-report")
+@app.post("/cost-report", dependencies=SECURED)
 def cost_report_endpoint(records: list[CostRecord]) -> dict:
     catalog = load_catalog()
     for record in records:
@@ -57,7 +61,7 @@ class VerifyRequest(BaseModel):
     ledger_key: str | None = None
 
 
-@app.post("/verify", response_model=VerifyResult)
+@app.post("/verify", dependencies=SECURED, response_model=VerifyResult)
 def verify(request: VerifyRequest) -> VerifyResult:
     cwd = Path(request.cwd) if request.cwd else None
     return verify_output(diff=request.diff, spec=request.spec, cwd=cwd, ledger_key=request.ledger_key)

@@ -53,6 +53,7 @@ def read_audit(
         return AuditPage(records=[], next_cursor=0)
 
     records: list[AuditRecord] = []
+    after = min(after, path.stat().st_size)  # log replaced by a shorter file: do not wait beyond its end
     cursor = after
     with path.open("rb") as f:
         f.seek(after)
