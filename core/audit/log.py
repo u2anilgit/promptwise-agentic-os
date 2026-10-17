@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel
+
 from core.audit.models import AuditRecord
 from core.config.resolve import resolve_path
 
@@ -119,3 +121,13 @@ def verify_chain(config: dict[str, Any]) -> tuple[bool, int | None]:
             prev_hash = claimed_hash
 
     return True, None
+
+
+class ChainStatus(BaseModel):
+    ok: bool
+    broken_at: int | None = None
+
+
+def chain_status(config: dict[str, Any]) -> ChainStatus:
+    ok, broken_at = verify_chain(config)
+    return ChainStatus(ok=ok, broken_at=broken_at)

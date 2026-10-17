@@ -1,0 +1,107 @@
+# core/audit/read.py
+"""Read side of the hash-chained audit log, for the dashboard and any other viewer.
+
+Cursors are byte offsets into the JSONL file, so a reader can resume exactly where it
+stopped. A trailing line without its newline is a writer mid-append: it is never
+consumed and the cursor stays in front of it, so it is delivered whole on the next read.
+Malformed lines are skipped rather than fatal; the hash-chain verdict (`chain_status`)
+is where tampering is reported.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel
+
+from core.audit.log import _log_path
+from core.audit.models import AuditRecord
+
+MIN_LIMIT = 1
+MAX_LIMIT = 500
+MAX_READ_BYTES = 8 * 1024 * 1024  # one forward read never pulls more than this into memory
+
+
+class AuditPage(BaseModel):
+    records: list[AuditRecord]
+    next_cursor: int
+
+
+def _clamp(limit: int) -> int:
+    return max(MIN_LIMIT, min(int(limit), MAX_LIMIT))
+
+
+def _parse(line: bytes) -> AuditRecord | None:
+    try:
+        return AuditRecord(**json.loads(line.decode("utf-8")))
+    except (ValueError, TypeError):
+        return None
+
+
+def _matches(record: AuditRecord, action: str | None, result: str | None) -> bool:
+    return (action is None or record.action == action) and (result is None or record.result == result)
+
+
+def read_audit(
+    config: dict[str, Any], after: int = 0, limit: int = 100, action: str | None = None, result: str | None = None
+) -> AuditPage:
+    path: Path = _log_path(config)
+    limit = _clamp(limit)
+    after = max(0, int(after))
+    if not path.exists():
+        return AuditPage(records=[], next_cursor=0)
+
+    records: list[AuditRecord] = []
+    cursor = after
+    with path.open("rb") as f:
+        f.seek(after)
+        data = f.read(MAX_READ_BYTES)
+    offset = 0
+    while len(records) < limit:
+        end = data.find(b"\n", offset)
+        if end == -1:  # partial trailing line (or nothing left): stop in front of it
+            break
+        line = data[offset:end].rstrip(b"\r")
+        offset = end + 1
+        cursor = after + offset
+        if not line.strip():
+            continue
+        record = _parse(line)
+        if record is not None and _matches(record, action, result):
+            records.append(record)
+    return AuditPage(records=records, next_cursor=cursor)
+
+
+def read_audit_tail(
+    config: dict[str, Any], limit: int = 100, action: str | None = None, result: str | None = None
+) -> AuditPage:
+    """The newest `limit` matching records, oldest first; next_cursor is the end of the last complete line."""
+    path: Path = _log_path(config)
+    limit = _clamp(limit)
+    if not path.exists():
+        return AuditPage(records=[], next_cursor=0)
+
+    size = path.stat().st_size
+    window = 64 * 1024
+    while True:
+        start = max(0, size - window)
+        with path.open("rb") as f:
+            f.seek(start)
+            data = f.read(size - start)
+        complete_end = data.rfind(b"\n") + 1  # drop a partial trailing line
+        body = data[:complete_end]
+        if start > 0:  # first line of a mid-file window is probably cut: drop it
+            first_nl = body.find(b"\n")
+            body = body[first_nl + 1:] if first_nl != -1 else b""
+        found: list[AuditRecord] = []
+        for line in body.split(b"\n"):
+            line = line.rstrip(b"\r")
+            if not line.strip():
+                continue
+            record = _parse(line)
+            if record is not None and _matches(record, action, result):
+                found.append(record)
+        if len(found) >= limit or start == 0 or window >= MAX_READ_BYTES:
+            return AuditPage(records=found[-limit:], next_cursor=start + complete_end)
+        window *= 4
