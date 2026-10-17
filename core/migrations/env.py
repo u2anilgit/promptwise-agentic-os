@@ -1,6 +1,7 @@
 # core/migrations/env.py — online migrations only, engine supplied by core.db.migrate.
 from alembic import context
 
+import core.routing.tables  # noqa: F401
 import core.spec.tables  # noqa: F401 — register tables on Base.metadata
 from core.db.base import Base
 

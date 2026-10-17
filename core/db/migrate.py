@@ -3,6 +3,7 @@
 core/migrations/env.py through Config.attributes."""
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,9 @@ from alembic.script import ScriptDirectory
 
 from core.db.base import database_url, make_engine
 
+# Alembic loads its script modules into shared interpreter state: concurrent callers in one process
+# (threaded gateway routes) must take turns, or the loader raises mid-import.
+_MIGRATE_LOCK = threading.Lock()
 _SCRIPT_LOCATION = Path(__file__).resolve().parent.parent / "migrations"
 
 
@@ -54,15 +58,16 @@ def current_revision(config: dict[str, Any], root: Path | None = None) -> str | 
 
 
 def migrate_to_head(config: dict[str, Any], root: Path | None = None) -> str:
-    current = current_revision(config, root)
-    if current is not None and current not in known_revisions():
-        raise ValueError(
-            f"database revision {current} is newer than this code (head {head_revision()}) - "
-            "upgrade the code; do not downgrade the data"
-        )
-    engine = make_engine(config, root)
-    try:
-        command.upgrade(_alembic_config(engine), "head")
-    finally:
-        engine.dispose()
-    return head_revision()
+    with _MIGRATE_LOCK:
+        current = current_revision(config, root)
+        if current is not None and current not in known_revisions():
+            raise ValueError(
+                f"database revision {current} is newer than this code (head {head_revision()}) - "
+                "upgrade the code; do not downgrade the data"
+            )
+        engine = make_engine(config, root)
+        try:
+            command.upgrade(_alembic_config(engine), "head")
+        finally:
+            engine.dispose()
+        return head_revision()
