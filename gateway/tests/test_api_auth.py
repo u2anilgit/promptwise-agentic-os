@@ -1,5 +1,6 @@
 import json
 import stat
+import sys
 
 import pytest
 from fastapi import Depends, FastAPI
@@ -87,8 +88,9 @@ def test_an_empty_token_file_is_regenerated_never_accepted(secured):
     assert len(_token(tmp)) >= 32
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
 def test_token_file_is_owner_only_where_supported(secured):
     client, tmp = secured
     client.get("/guarded")
     mode = stat.S_IMODE((tmp / "token").stat().st_mode)
-    assert mode & 0o077 == 0 or mode == 0o666  # Windows reports 0o666; POSIX must be private
+    assert mode & 0o077 == 0

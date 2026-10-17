@@ -57,8 +57,14 @@ def dashboard_token() -> None:
     from gateway.auth import load_or_create_token, token_path
     from gateway.mcp_guard import operator_config
 
+    from gateway.auth import CredentialUnavailable
+
     op = operator_config()
-    value = load_or_create_token(op)
+    try:
+        value = load_or_create_token(op)
+    except CredentialUnavailable as exc:
+        typer.echo(f"error: {exc}")
+        raise typer.Exit(code=1)
     typer.echo(f"# {token_path(op)}")
     typer.echo(value)
 

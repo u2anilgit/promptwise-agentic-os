@@ -3,14 +3,14 @@ from fastapi.testclient import TestClient
 
 from gateway.app import app
 
-HEADERS = {"Authorization": "Bearer test-api-credential"}
+HEADERS = {"Authorization": "Bearer test-api-credential-0123456789abcdef0123"}
 client = TestClient(app, headers=HEADERS)
 
 
 @pytest.fixture(autouse=True)
 def _api_credential(tmp_path, monkeypatch):
     path = tmp_path / "api_credential"
-    path.write_text("test-api-credential", encoding="utf-8")
+    path.write_text("test-api-credential-0123456789abcdef0123", encoding="utf-8")
     monkeypatch.setenv("PROMPTWISE_GATEWAY__TOKEN_PATH", str(path))
 
 

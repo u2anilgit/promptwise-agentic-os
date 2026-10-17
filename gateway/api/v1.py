@@ -8,6 +8,7 @@ are data: the UI must render them as escaped text.
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from pathlib import Path
 from typing import Any, AsyncIterator, Literal
@@ -22,15 +23,17 @@ from core.policy.engine import load_policy
 from core.spec.engine import SpecStatus, list_specs, spec_status
 from core.spec.models import SpecSummary
 from gateway.auth import require_token
-from gateway.mcp_guard import effective_config, operator_config
+from gateway.mcp_guard import operator_config, pinned_config
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
 
 HEARTBEAT_SECONDS = 15.0
+MAX_STREAMS = 16
+_active_streams = 0
 
 
 def _config() -> dict[str, Any]:
-    return effective_config(operator_config(), Path.cwd())
+    return pinned_config(operator_config())  # no project layer: an agent-writable config cannot break or redirect the API
 
 
 class AuditResponse(AuditPage):
@@ -86,7 +89,7 @@ async def audit_events(
     deadline = time.monotonic() + max_seconds
     last_beat = time.monotonic()
     while time.monotonic() < deadline:
-        page = read_audit(config, after=cursor, limit=100)
+        page = await asyncio.to_thread(read_audit, config, cursor, 100)
         if page.next_cursor != cursor:
             for index, record in enumerate(page.records):
                 id_line = f"id: {page.next_cursor}\n" if index == len(page.records) - 1 else ""
@@ -101,20 +104,33 @@ async def audit_events(
         await asyncio.sleep(poll_seconds)
 
 
+async def _bounded(stream: AsyncIterator[str]) -> AsyncIterator[str]:
+    global _active_streams
+    try:
+        async for chunk in stream:
+            yield chunk
+    finally:
+        _active_streams -= 1
+
+
 @router.get("/events")
 async def events(
     cursor: int | None = Query(None, ge=0),
     last_event_id: str | None = Header(None),
 ) -> StreamingResponse:
     config = _config()
-    if cursor is None and last_event_id is not None and last_event_id.isdigit():
+    if cursor is None and last_event_id is not None and re.fullmatch(r"\d{1,18}", last_event_id):
         cursor = int(last_event_id)
     if cursor is None:  # default: only what arrives from now on
         cursor = read_audit_tail(config, limit=1).next_cursor
     gateway = config.get("gateway", {})
+    global _active_streams
+    if _active_streams >= MAX_STREAMS:
+        raise HTTPException(status_code=429, detail="too many event streams")
+    _active_streams += 1
     stream = audit_events(
         config, cursor, float(gateway.get("sse_max_seconds", 300)), float(gateway.get("sse_poll_seconds", 1.0))
     )
     return StreamingResponse(
-        stream, media_type="text/event-stream", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"}
+        _bounded(stream), media_type="text/event-stream", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"}
     )

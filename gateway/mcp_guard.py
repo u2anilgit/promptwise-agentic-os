@@ -94,6 +94,19 @@ def _set(cfg: dict[str, Any], dotted: str, value: Any) -> None:
     cursor[keys[-1]] = value
 
 
+def _pin_state_paths(cfg: dict[str, Any], operator_config: dict[str, Any]) -> dict[str, Any]:
+    gateway_root = Path.cwd()
+    for dotted, default in OPERATOR_STATE_PATHS:
+        _set(cfg, dotted, str(resolve_path(operator_config, dotted, default, root=gateway_root)))
+    return cfg
+
+
+def pinned_config(operator_config: dict[str, Any]) -> dict[str, Any]:
+    """Operator config with governance state pinned to the gateway directory and NO project layer at
+    all — for read-only consumers (dashboard API) that must not be affected by agent-writable files."""
+    return _pin_state_paths(copy.deepcopy(operator_config), operator_config)
+
+
 def effective_config(operator_config: dict[str, Any], root: Path) -> dict[str, Any]:
     cfg = copy.deepcopy(operator_config)
 
@@ -105,10 +118,7 @@ def effective_config(operator_config: dict[str, Any], root: Path) -> dict[str, A
         if isinstance(value, str) and value and value in allowed:
             _set(cfg, f"verify.{key}", value)
 
-    gateway_root = Path.cwd()
-    for dotted, default in OPERATOR_STATE_PATHS:
-        _set(cfg, dotted, str(resolve_path(operator_config, dotted, default, root=gateway_root)))
-    return cfg
+    return _pin_state_paths(cfg, operator_config)
 
 
 def _safe_audit(op: dict[str, Any], **fields: Any) -> bool:

@@ -21,6 +21,7 @@ from core.audit.models import AuditRecord
 from core.config.resolve import resolve_path
 
 GENESIS_HASH = "0" * 64
+MAX_DETAIL_BYTES = 32 * 1024
 
 
 def _log_path(config: dict[str, Any]) -> Path:
@@ -80,6 +81,11 @@ def record_audit(
     path.parent.mkdir(parents=True, exist_ok=True)
     prev_hash = _last_hash(path)
 
+    detail = detail or {}
+    encoded = json.dumps(detail, default=str)
+    if len(encoded.encode("utf-8")) > MAX_DETAIL_BYTES:  # a hostile caller cannot bloat the log
+        detail = {"truncated": True, "original_bytes": len(encoded.encode("utf-8"))}
+
     body = {
         "id": str(uuid.uuid4()),
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -87,7 +93,7 @@ def record_audit(
         "action": action,
         "target": target,
         "result": result,
-        "detail": detail or {},
+        "detail": detail,
         "prev_hash": prev_hash,
     }
     record_hash = _record_hash(body)
