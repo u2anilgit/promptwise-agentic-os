@@ -16,6 +16,7 @@ gateway:
   token_path: ~/.promptwise/dashboard_token
   sse_max_seconds: 300
   sse_poll_seconds: 1.0
+  dashboard_dir: dashboard/dist
 paths:
   packs_installed: packs/installed
   packs_registry: packs/registry

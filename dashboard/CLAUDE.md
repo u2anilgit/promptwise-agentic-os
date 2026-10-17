@@ -14,6 +14,10 @@ Renders `gateway/` REST+WS data. Two-mode design per `research/aug2026-findings.
 
 React 18 + Vite + TypeScript, Tailwind + shadcn/ui, TanStack Query for REST, SSE (EventSource) for live feeds — see docs/superpowers/specs/2026-10-17-dashboard-design.md (D3). No server-side rendering needed — this is an authenticated internal tool, not a public site.
 
+## Build, test, serve (slice 6b, done)
+
+`cd dashboard && npm ci --ignore-scripts && npm test && npm run build`; the gateway serves `dashboard/dist` at `/` (strict CSP, `gateway.dashboard_dir`) when it exists. Dev: `npm run dev` proxies `/api` to `GATEWAY_URL` (default `http://127.0.0.1:8420`). Types come from `dashboard/openapi.json` (`python -m scripts.export_openapi`, then `npm run gen:api`); a Python test fails if the snapshot is stale. Rules enforced by tests: API strings render as text only (no HTML sinks), the credential is in `sessionStorage` only, the live feed uses `fetch` streaming with `Last-Event-ID` resume and is capped at 500 rows. Implemented: credential gate, audit viewer with chain verdict and live feed, diagnostics panel. Versions are pinned exactly; lockfile is committed.
+
 ## Layout (target)
 
 ```

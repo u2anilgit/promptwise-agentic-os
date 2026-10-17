@@ -2,7 +2,8 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
+from starlette.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from core.config.resolve import resolve_config_auto
@@ -25,27 +26,26 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="PromptWise Agentic OS Gateway", version="0.1.0", lifespan=lifespan)
-app.include_router(api_v1)
 SECURED = [Depends(require_token)]
+routes = APIRouter()
 
 
-@app.get("/healthz")
+@routes.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok" if is_alive() else "down"}
 
 
-@app.get("/diagnostics", dependencies=SECURED)
+@routes.get("/diagnostics", dependencies=SECURED)
 def diagnostics() -> list[dict[str, str]]:
     return [result.model_dump() for result in run_diagnostics()]
 
 
-@app.post("/route", dependencies=SECURED, response_model=RoutingDecision)
+@routes.post("/route", dependencies=SECURED, response_model=RoutingDecision)
 def route(request: RouteRequest) -> RoutingDecision:
     return route_request(request)
 
 
-@app.post("/cost-report", dependencies=SECURED)
+@routes.post("/cost-report", dependencies=SECURED)
 def cost_report_endpoint(records: list[CostRecord]) -> dict:
     catalog = load_catalog()
     for record in records:
@@ -61,7 +61,43 @@ class VerifyRequest(BaseModel):
     ledger_key: str | None = None
 
 
-@app.post("/verify", dependencies=SECURED, response_model=VerifyResult)
+@routes.post("/verify", dependencies=SECURED, response_model=VerifyResult)
 def verify(request: VerifyRequest) -> VerifyResult:
     cwd = Path(request.cwd) if request.cwd else None
     return verify_output(diff=request.diff, spec=request.spec, cwd=cwd, ledger_key=request.ledger_key)
+
+
+DASHBOARD_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; "
+    "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+)
+
+
+class DashboardFiles(StaticFiles):
+    """The built dashboard bundle, served with a strict CSP. Nothing here is dynamic or privileged:
+    the bundle only ever talks to the authenticated /api/v1 routes."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Content-Security-Policy"] = DASHBOARD_CSP
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Cache-Control"] = (
+            "public, max-age=31536000, immutable" if path.startswith("assets/") else "no-store"
+        )
+        return response
+
+
+def create_app(dashboard_dir: Path | str | None = None) -> FastAPI:
+    application = FastAPI(title="PromptWise Agentic OS Gateway", version="0.1.0", lifespan=lifespan)
+    application.include_router(api_v1)
+    application.include_router(routes)
+    if dashboard_dir is None:
+        dashboard_dir = resolve_config_auto().get("gateway", {}).get("dashboard_dir", "dashboard/dist")
+    bundle = Path(dashboard_dir)
+    if (bundle / "index.html").is_file():  # mounted last so every API route wins
+        application.mount("/", DashboardFiles(directory=bundle, html=True), name="dashboard")
+    return application
+
+
+app = create_app()

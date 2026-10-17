@@ -2,7 +2,8 @@
 .claude
 .worktrees
 docs
-dashboard
+dashboard/node_modules
+dashboard/dist
 **/tests
 **/__pycache__
 **/*.pyc
