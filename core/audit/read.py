@@ -30,6 +30,11 @@ class AuditPage(BaseModel):
     next_cursor: int
 
 
+def log_size(config: dict[str, Any]) -> int:
+    path: Path = _log_path(config)
+    return path.stat().st_size if path.exists() else 0
+
+
 def _clamp(limit: int) -> int:
     return max(MIN_LIMIT, min(int(limit), MAX_LIMIT))
 

@@ -17,6 +17,9 @@ from core.verify.models import VerifyResult
 from gateway.api.v1 import router as api_v1
 from gateway.auth import require_token
 from gateway.healthcheck import is_alive
+from gateway.mcp_guard import operator_config
+
+INSTALL_ROOT = Path(__file__).resolve().parents[1]
 
 
 @asynccontextmanager
@@ -83,7 +86,7 @@ class DashboardFiles(StaticFiles):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Cache-Control"] = (
-            "public, max-age=31536000, immutable" if path.startswith("assets/") else "no-store"
+            "public, max-age=31536000, immutable" if path.replace("\\", "/").startswith("assets/") else "no-store"
         )
         return response
 
@@ -93,8 +96,12 @@ def create_app(dashboard_dir: Path | str | None = None) -> FastAPI:
     application.include_router(api_v1)
     application.include_router(routes)
     if dashboard_dir is None:
-        dashboard_dir = resolve_config_auto().get("gateway", {}).get("dashboard_dir", "dashboard/dist")
+        # Operator config only (never the cwd's project layers) and resolved against the install, not the cwd:
+        # the gateway's working directory may be a project an agent can edit, and this folder is served on the API's origin.
+        dashboard_dir = operator_config().get("gateway", {}).get("dashboard_dir") or "dashboard/dist"
     bundle = Path(dashboard_dir)
+    if not bundle.is_absolute():
+        bundle = INSTALL_ROOT / bundle
     if (bundle / "index.html").is_file():  # mounted last so every API route wins
         application.mount("/", DashboardFiles(directory=bundle, html=True), name="dashboard")
     return application

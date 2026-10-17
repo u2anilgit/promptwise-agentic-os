@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from core.audit.log import record_audit
 from gateway import auth
 from gateway.app import app
-from gateway.mcp_guard import operator_config
+from gateway.mcp_guard import operator_config, pinned_config
 
 TOKEN = "review-credential-0123456789abcdef0123456789"
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
@@ -114,3 +114,27 @@ def test_concurrent_event_streams_are_capped(api, monkeypatch):
     client, _ = api
     monkeypatch.setattr(v1, "MAX_STREAMS", 0)
     assert client.get("/api/v1/events", headers=AUTH).status_code == 429
+
+
+def test_event_stream_announces_a_reset_when_the_log_is_replaced(api):
+    import asyncio
+
+    from gateway.api.v1 import audit_events
+
+    _, tmp = api
+    cfg = pinned_config(operator_config())
+    for i in range(3):
+        record_audit(cfg, actor="t", action="a", target=f"old{i}", result="allow")
+    far = (tmp / "audit.jsonl").stat().st_size
+    (tmp / "audit.jsonl").write_text("", encoding="utf-8")  # rotated to a shorter (empty) file
+    record_audit(cfg, actor="t", action="a", target="fresh", result="allow")
+
+    async def collect():
+        out = []
+        async for chunk in audit_events(cfg, cursor=far, max_seconds=0.3, poll_seconds=0.05):
+            out.append(chunk)
+        return "".join(out)
+
+    text = asyncio.run(collect())
+    assert text.index("event: reset") < text.index("event: audit")
+    assert "fresh" in text

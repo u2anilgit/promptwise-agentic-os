@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from core.audit.log import ChainStatus, chain_status
-from core.audit.read import AuditPage, read_audit, read_audit_tail
+from core.audit.read import AuditPage, log_size, read_audit, read_audit_tail
 from core.diagnostics.checks import run_diagnostics
 from core.policy.engine import load_policy
 from core.spec.engine import SpecStatus, list_specs, spec_status
@@ -89,6 +89,9 @@ async def audit_events(
     deadline = time.monotonic() + max_seconds
     last_beat = time.monotonic()
     while time.monotonic() < deadline:
+        if cursor > await asyncio.to_thread(log_size, config):  # the log was replaced by a shorter one
+            cursor = 0
+            yield "id: 0\nevent: reset\ndata: {}\n\n"
         page = await asyncio.to_thread(read_audit, config, cursor, 100)
         if page.next_cursor != cursor:
             for index, record in enumerate(page.records):

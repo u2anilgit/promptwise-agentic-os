@@ -13,3 +13,5 @@ dashboard/dist
 packs/installed/*
 !packs/installed/.gitkeep
 config/hardware_profile.yaml
+.promptwise
+dashboard/.promptwise

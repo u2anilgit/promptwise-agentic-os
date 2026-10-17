@@ -1,6 +1,6 @@
 # Dashboard bundle: built from the committed package-lock (npm ci verifies integrity hashes,
 # lifecycle scripts disabled). Only the static output is copied into the runtime image.
-FROM node:22-slim AS dashboard
+FROM node:24-slim AS dashboard
 WORKDIR /dashboard
 COPY dashboard/package.json dashboard/package-lock.json ./
 RUN npm ci --ignore-scripts
