@@ -12,6 +12,7 @@ from core.spec.models import (
     PlanArtifact,
     Requirement,
     SpecArtifact,
+    SpecSummary,
     TaskNode,
     TaskRecord,
 )
@@ -167,3 +168,16 @@ def replace_frozen_check(session: Session, spec_id: str, requirement_id: str, ne
     row.expect_baseline, row.baseline = new.expect_baseline, new.baseline
     session.flush()
     return old
+
+
+def list_specs(session: Session) -> list[SpecSummary]:
+    rows = session.scalars(select(SpecRow).order_by(SpecRow.created_at.desc(), SpecRow.spec_id.desc())).all()
+    out = []
+    for row in rows:
+        tasks = get_tasks(session, row.spec_id)
+        out.append(SpecSummary(
+            spec_id=row.spec_id, request=row.request, complexity=row.complexity,
+            stage=get_stage(session, row.spec_id) or "specified", created_at=row.created_at,
+            tasks_total=len(tasks), tasks_done=sum(1 for t in tasks if t.status == "done"),
+        ))
+    return out

@@ -45,6 +45,7 @@ from core.spec.models import (
     PlanArtifact,
     Requirement,
     SpecArtifact,
+    SpecSummary,
     TaskNode,
     TaskRecord,
 )
@@ -623,3 +624,10 @@ def spec_status(spec_id: str, config: dict[str, Any] | None = None, root: Path |
             requirements=spec.requirements, tasks=store.get_tasks(session, spec_id),
             checks=store.get_frozen_checks(session, spec_id),
         )
+
+
+def list_specs(config: dict[str, Any] | None = None, root: Path | None = None) -> list[SpecSummary]:
+    """Read-only overview of every spec, newest first."""
+    config = _prepare(config, root)
+    with session_scope(config, root) as session:
+        return store.list_specs(session)

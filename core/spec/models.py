@@ -79,3 +79,13 @@ class ConvergeReport(BaseModel):
     pending_tasks: int
     stale: bool
     reasons: list[str]
+
+
+class SpecSummary(BaseModel):
+    spec_id: str
+    request: str
+    complexity: str
+    stage: str
+    created_at: float
+    tasks_total: int
+    tasks_done: int
