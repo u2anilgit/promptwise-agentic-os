@@ -84,9 +84,13 @@ def usage_record(
 ) -> None:
     """Record token usage (self-reported). Cost is fixed from the catalog tier at this moment."""
     from core.routing.usage import record_usage
+    from gateway.mcp_guard import operator_config, pinned_config
 
     try:
-        event = record_usage(tier, tokens_in, tokens_out, agent=agent, task_ref=task_ref or None, spec_id=spec_id or None)
+        event = record_usage(
+            tier, tokens_in, tokens_out, agent=agent, task_ref=task_ref or None, spec_id=spec_id or None,
+            config=pinned_config(operator_config()),
+        )
     except ValueError as exc:
         typer.echo(f"error: {exc}")
         raise typer.Exit(code=2)
@@ -97,15 +101,16 @@ def usage_record(
 def usage_report_cmd(days: int = typer.Option(7, help="Window in days (1-365)")) -> None:
     """Totals, by tier and by agent, and cost per completed task over the window."""
     from core.routing.usage import usage_report
+    from gateway.mcp_guard import operator_config, pinned_config
 
     try:
-        report = usage_report(days=days)
+        report = usage_report(days=days, config=pinned_config(operator_config()))
     except ValueError as exc:
         typer.echo(f"error: {exc}")
         raise typer.Exit(code=2)
     typer.echo(f"last {report.days} day(s): events {report.events}, tasks {report.tasks}, total ${report.total_cost_usd}")
     per_task = "n/a (no task references)" if report.cost_per_task_usd is None else f"${report.cost_per_task_usd}"
-    typer.echo(f"cost per task: {per_task}")
+    typer.echo(f"cost per referenced task: {per_task}")
     for name, bucket in sorted(report.by_tier.items()):
         typer.echo(f"  tier {name}: {bucket.events} events, ${bucket.cost_usd}")
     for name, bucket in sorted(report.by_agent.items()):

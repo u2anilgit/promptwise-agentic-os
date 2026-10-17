@@ -152,7 +152,7 @@ export function AuditView({ onSignedOut, chainPollMs = 15000 }: { onSignedOut?: 
                 <td className="p-2 break-all">{r.timestamp}</td>
                 <td className="p-2 break-all">{r.actor}</td>
                 <td className="p-2 break-all" title={mode === "builder" ? r.action : undefined}>
-                  {(mode === "builder" && explainAction(r.action, r.result)) || r.action}
+                  {(mode === "builder" && explainAction(r.action, r.result, r.actor)) || r.action}
                 </td>
                 <td className="p-2 break-all">
                   {r.target}

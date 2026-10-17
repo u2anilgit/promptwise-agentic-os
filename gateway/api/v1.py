@@ -98,7 +98,10 @@ class UsageResponse(BaseModel):
 @router.get("/usage", response_model=UsageResponse)
 def usage(days: int = Query(7, ge=1, le=365)) -> UsageResponse:
     config = _config()
-    catalog = load_catalog(config)
+    try:
+        catalog = load_catalog(config)
+    except Exception:  # noqa: BLE001 - a broken catalog must not take the report down
+        catalog = {}
     return UsageResponse(
         report=usage_report(days=days, config=config, root=Path.cwd()),
         tiers=[TierInfo(name=name, requires_cloud=tier.requires_cloud) for name, tier in catalog.items()],

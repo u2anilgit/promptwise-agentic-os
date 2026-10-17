@@ -250,3 +250,15 @@ def test_usage_view_with_no_data_is_zeros(api):
     client, _ = api
     body = client.get("/api/v1/usage", headers=AUTH).json()
     assert body["report"]["events"] == 0 and body["report"]["cost_per_task_usd"] is None
+
+
+def test_usage_view_survives_a_broken_catalog(api):
+    from core.routing.usage import record_usage
+
+    client, tmp = api
+    record_usage("local-small", 1, 1, task_ref="T", config=_cfg(), root=tmp)
+    (tmp / "catalog").mkdir()
+    (tmp / "catalog" / "model_catalog.yaml").write_text("tiers:\n  x:\n    provider: p\n", encoding="utf-8")
+    response = client.get("/api/v1/usage", headers=AUTH)
+    assert response.status_code == 200
+    assert response.json()["report"]["events"] == 1 and response.json()["tiers"] == []

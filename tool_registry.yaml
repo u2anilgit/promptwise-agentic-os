@@ -59,4 +59,4 @@ tools:
   record_usage:
     version: 0.1.0
     enabled: true
-    description_sha256: 532d7fdb6fcdfd1620b0a49b72ed094a8938c8d939d5aa6fa859876cfbd4360f
+    description_sha256: d601900971bb3b17a94ad7fbcdea674f733e0380830c0682a39267fa0a8c62a4

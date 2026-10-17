@@ -59,3 +59,5 @@ verify:
   mutation_timeout_seconds: 1800
   reviewer_command: ""
   reviewer_timeout_seconds: 300
+usage:
+  max_events_per_hour: 5000

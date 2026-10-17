@@ -136,15 +136,15 @@ def record_memory(text: str, scope: str, root: str = "", session_id: str = "") -
 
 @mcp_app.tool()
 def record_usage(
-    tier: str, tokens_in: int, tokens_out: int, agent: str = "unknown", task_ref: str = "", spec_id: str = "", root: str = ""
+    tier: str, tokens_in: Any, tokens_out: Any, agent: str = "unknown", task_ref: str = "", spec_id: str = "", root: str = ""
 ) -> dict:
     """Report the model tokens you just used so the dashboard can show cost per completed task.
     Usage is self-reported: report honestly after each model call or task.
 
     Args:
         tier: Model tier name from the catalog (e.g. "local-small", "cloud-premium"); unknown tiers are rejected.
-        tokens_in: Input tokens used (integer, 0 to 1,000,000,000).
-        tokens_out: Output tokens used (integer, 0 to 1,000,000,000).
+        tokens_in: Input tokens used: a whole number, 0 to 1,000,000,000 (validated strictly by the server).
+        tokens_out: Output tokens used: a whole number, 0 to 1,000,000,000. At least one of the two must be above 0.
         agent: Name of the reporting agent (max 200 characters).
         task_ref: Your task identifier, so cost per task can be computed (max 200 characters).
         spec_id: Spec this work belongs to, if any (max 200 characters).

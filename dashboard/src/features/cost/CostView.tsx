@@ -8,7 +8,14 @@ import { useMode } from "../../mode";
 type Usage = components["schemas"]["UsageResponse"];
 type Bucket = components["schemas"]["Bucket"];
 
-const usd = (n: number) => `$${n.toFixed(n !== 0 && Math.abs(n) < 0.01 ? 4 : 2)}`;
+// Sub-cent costs keep their significant digits ($0.0000004, not $0.0000); large values never use exponent form.
+function usd(n: number): string {
+  if (!Number.isFinite(n)) return "n/a";
+  if (n === 0) return "$0.00";
+  const abs = Math.abs(n);
+  if (abs < 0.01) return `$${n.toFixed(Math.min(12, 2 - Math.floor(Math.log10(abs)))).replace(/0+$/, "")}`;
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 function BucketTable({ label, rows, locality, showTokens }: {
   label: string;
@@ -95,11 +102,11 @@ export function CostView({ onSignedOut }: { onSignedOut: () => void }) {
         <>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded border bg-white p-3">
-              <div className="text-xs text-slate-500">Cost per completed task</div>
+              <div className="text-xs text-slate-500">Cost per referenced task</div>
               <div className="text-2xl font-semibold">
                 {report.cost_per_task_usd === null ? <span className="text-base text-slate-500">No task references yet</span> : usd(report.cost_per_task_usd)}
               </div>
-              <div className="text-xs text-slate-500">{report.tasks} task(s)</div>
+              <div className="text-xs text-slate-500">{report.tasks} task(s) agents named; not tied to accepted completions</div>
             </div>
             <div className="rounded border bg-white p-3">
               <div className="text-xs text-slate-500">Total cost</div>

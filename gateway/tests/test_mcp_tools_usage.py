@@ -27,3 +27,10 @@ async def test_bad_usage_is_an_error_dict_and_writes_nothing(operator, args, nee
     result = await _call("record_usage", args)
     assert needle in result["error"]
     assert "event" not in result
+
+
+@pytest.mark.parametrize("value", [True, "5", 1e3, 2.5, -0.0, None])
+async def test_loosely_typed_token_values_are_rejected_over_mcp(operator, value):
+    result = await _call("record_usage", {"tier": "local-small", "tokens_in": value, "tokens_out": 1})
+    assert "tokens" in result.get("error", "") or "error" in result
+    assert "event" not in result

@@ -117,7 +117,73 @@ def test_report_window_is_bounded(cfg, tmp_path, days):
 def test_concurrent_writers_do_not_lose_events(cfg, tmp_path):
     from concurrent.futures import ThreadPoolExecutor
 
-    record_usage("local-small", 1, 1, config=cfg, root=tmp_path)  # migrate once, up front
+    # no up-front migration: the first calls race to create the schema, which is what the lock is for
     with ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(lambda i: record_usage("local-small", 1, 1, task_ref=f"c{i}", config=cfg, root=tmp_path), range(40)))
-    assert usage_report(config=cfg, root=tmp_path).events == 41
+    assert usage_report(config=cfg, root=tmp_path).events == 40
+
+
+# --- review fixes ---
+def _catalog(tmp_path, input_cost, output_cost="0.0"):
+    path = tmp_path / "catalog.yaml"
+    path.write_text(
+        "tiers:\n  t:\n    provider: p\n    model_id: m\n    min_ram_gb: 0\n    requires_cloud: true\n"
+        f"    cost_per_1k_input_usd: {input_cost}\n    cost_per_1k_output_usd: {output_cost}\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+@pytest.mark.parametrize("bad", [".inf", ".nan", "-5", "-.inf"])
+def test_a_catalog_with_non_finite_or_negative_prices_cannot_poison_the_ledger(cfg, tmp_path, bad):
+    cfg["paths"]["model_catalog"] = str(_catalog(tmp_path, bad))
+    with pytest.raises(ValueError):
+        record_usage("t", 1000, 1000, config=cfg, root=tmp_path)
+    cfg["paths"]["model_catalog"] = "catalog/model_catalog.yaml"
+    assert usage_report(config=cfg, root=tmp_path).events == 0
+
+
+def test_tiny_real_costs_do_not_round_to_zero(cfg, tmp_path):
+    cfg["paths"]["model_catalog"] = str(_catalog(tmp_path, "0.0001"))
+    event = record_usage("t", 4, 0, config=cfg, root=tmp_path)
+    assert event.cost_usd > 0
+
+
+def test_a_report_with_no_tokens_is_rejected(cfg, tmp_path):
+    with pytest.raises(ValueError, match="at least one token"):
+        record_usage("local-small", 0, 0, config=cfg, root=tmp_path)
+
+
+def test_write_rate_is_capped_per_hour(cfg, tmp_path):
+    cfg["usage"] = {"max_events_per_hour": 3}
+    for _ in range(3):
+        record_usage("local-small", 1, 1, config=cfg, root=tmp_path)
+    with pytest.raises(ValueError, match="rate limit"):
+        record_usage("local-small", 1, 1, config=cfg, root=tmp_path)
+    assert usage_report(config=cfg, root=tmp_path).events == 3
+
+
+def test_by_agent_is_bounded_with_an_other_bucket(cfg, tmp_path):
+    for i in range(25):
+        record_usage("cloud-premium", 100 + i, 1, agent=f"agent-{i}", config=cfg, root=tmp_path)
+    report = usage_report(config=cfg, root=tmp_path)
+    assert len(report.by_agent) == 21 and "(other)" in report.by_agent
+    assert report.by_agent["(other)"].events == 5
+    assert sum(b.events for b in report.by_agent.values()) == 25
+
+
+def test_the_same_task_id_in_two_specs_is_two_tasks(cfg, tmp_path):
+    record_usage("local-small", 1, 1, task_ref="t1", spec_id="spec-a", config=cfg, root=tmp_path)
+    record_usage("local-small", 1, 1, task_ref="t1", spec_id="spec-b", config=cfg, root=tmp_path)
+    record_usage("local-small", 1, 1, task_ref="t1", spec_id="spec-b", config=cfg, root=tmp_path)
+    assert usage_report(config=cfg, root=tmp_path).tasks == 2
+
+
+@pytest.mark.parametrize("value", ["a\x00b", "line\nbreak", "\x1b[31mred", "rtl\u202eevil", "tab\there"])
+def test_control_and_bidi_characters_are_rejected_in_text_fields(cfg, tmp_path, value):
+    with pytest.raises(ValueError, match="control"):
+        record_usage("local-small", 1, 1, agent=value, config=cfg, root=tmp_path)
+
+
+def test_ordinary_unicode_is_fine(cfg, tmp_path):
+    assert record_usage("local-small", 1, 1, agent="agent-é-日本", config=cfg, root=tmp_path).agent == "agent-é-日本"

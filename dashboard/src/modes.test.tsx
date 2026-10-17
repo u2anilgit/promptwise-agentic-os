@@ -33,11 +33,11 @@ describe("explain lookup", () => {
   });
 
   it("explains known audit actions by outcome and returns null for unknown ones", () => {
-    expect(explainAction("complete_task", "allow")).toMatch(/accepted/i);
-    expect(explainAction("complete_task", "deny")).toMatch(/rejected/i);
-    expect(explainAction("mcp_root_denied", "deny")).toMatch(/outside the allowed/i);
-    expect(explainAction("api_auth_denied", "deny")).toMatch(/wrong credential/i);
-    expect(explainAction("never_heard_of_it", "allow")).toBeNull();
+    expect(explainAction("complete_task", "allow", "spec_engine")).toMatch(/accepted/i);
+    expect(explainAction("complete_task", "deny", "spec_engine")).toMatch(/rejected/i);
+    expect(explainAction("mcp_root_denied", "deny", "mcp")).toMatch(/outside the allowed/i);
+    expect(explainAction("api_auth_denied", "deny", "api")).toMatch(/wrong credential/i);
+    expect(explainAction("never_heard_of_it", "allow", "mcp")).toBeNull();
   });
 });
 

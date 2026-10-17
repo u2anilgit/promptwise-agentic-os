@@ -40,6 +40,7 @@ OPERATOR_STATE_PATHS = (
     ("verify.failure_ledger_path", ".promptwise/failure_ledger.json"),
     ("policy.jit_grants_path", ".promptwise/jit_grants.json"),
     ("actions.undo_buffer_path", ".promptwise/undo_buffer.json"),
+    ("paths.model_catalog", "catalog/model_catalog.yaml"),
 )
 
 OPERATOR_CONFIG_ENV = "PROMPTWISE_OPERATOR_CONFIG"
