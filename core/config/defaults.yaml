@@ -13,6 +13,9 @@ gateway:
   port: 8000
   allowed_roots: []
   allowed_verify_commands: []
+  token_path: .promptwise/dashboard_token
+  sse_max_seconds: 300
+  sse_poll_seconds: 1.0
 paths:
   packs_installed: packs/installed
   packs_registry: packs/registry
