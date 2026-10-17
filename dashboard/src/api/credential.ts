@@ -1,4 +1,4 @@
-// The API credential lives in sessionStorage only: it dies with the tab, and is never put in a URL or localStorage.
+// The API credential lives in sessionStorage only: it dies with the tab, and is never put in a URL or in persistent storage.
 const KEY = "promptwise.credential";
 
 export function getCredential(): string | null {

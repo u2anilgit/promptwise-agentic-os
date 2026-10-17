@@ -50,7 +50,7 @@ describe("apiGet", () => {
   it("keeps the credential on 503 and reports it distinctly", async () => {
     setCredential("tok");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 503 })));
-    const err = await apiGet("/api/v1/policy").catch((e) => e);
+    const err = (await apiGet("/api/v1/policy").catch((e) => e)) as ApiError;
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(503);
     expect(getCredential()).toBe("tok");
