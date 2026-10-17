@@ -57,6 +57,8 @@ export interface StreamOptions {
   signal: AbortSignal;
   onRecord: (record: AuditRecord) => void;
   onState: (state: FeedState) => void;
+  /** Resume cursor (a byte offset from /api/v1/audit's next_cursor); sent as the first Last-Event-ID. */
+  after?: string;
   fetchImpl?: typeof fetch;
   retryMs?: number;
 }
@@ -74,7 +76,7 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
  * Last-Event-ID and drop records already delivered (delivery is at-least-once). */
 export async function streamAudit(options: StreamOptions): Promise<void> {
   const { signal, onRecord, onState, fetchImpl = fetch, retryMs = 2000 } = options;
-  let lastId: string | undefined;
+  let lastId: string | undefined = options.after;
   const seen = new Set<string>();
   while (!signal.aborted) {
     onState(lastId === undefined ? "connecting" : "reconnecting");
