@@ -47,6 +47,22 @@ def pin_tools() -> None:
     typer.echo(f"pinned {len(pinned)} tool(s): {', '.join(pinned) or 'none'}")
 
 
+dashboard_app = typer.Typer(help="Dashboard access")
+app.add_typer(dashboard_app, name="dashboard")
+
+
+@dashboard_app.command("token")
+def dashboard_token() -> None:
+    """Print the gateway's API bearer token (created on first use). Replace the file to rotate it."""
+    from gateway.auth import load_or_create_token, token_path
+    from gateway.mcp_guard import operator_config
+
+    op = operator_config()
+    value = load_or_create_token(op)
+    typer.echo(f"# {token_path(op)}")
+    typer.echo(value)
+
+
 spec_app = typer.Typer(help="Spec-driven workflow: specify -> plan -> tasks -> complete -> verify")
 app.add_typer(spec_app, name="spec")
 

@@ -45,6 +45,10 @@ uv pip compile pyproject.toml --universal --python-version 3.12 --generate-hashe
 
 A lock is only trusted after it is exercised: create a venv from the dev lock (`uv venv --python 3.12`, `uv pip sync --require-hashes requirements-dev.lock`, `uv pip install --no-deps -e .`) and run the full suite in it. `core/tests/security/test_lockfiles.py` guards that every pin is hashed, none is on the known-bad list, every direct dependency is present, and LiteLLM is absent. Add a bad release to `security/known_bad_packages.yaml` the moment an advisory lands.
 
+## 2b-1. Gateway API credential (operator reference)
+
+The HTTP API (everything but `/healthz`) needs a bearer credential stored at `gateway.token_path` (default `.promptwise/dashboard_token`, gitignored, created on first use, owner-only where the OS supports it). `promptwise dashboard token` prints it. Rotate by replacing the file contents (read on every request, no restart). Failed attempts appear in the audit log as `api_auth_denied` (rate-limited to one per second). Keep the gateway on loopback (compose binds `127.0.0.1` by default; do not set `BIND_ADDR=0.0.0.0` without a TLS reverse proxy: the credential travels in a header).
+
 ## 2c. Independent verification (operator reference)
 
 A task reaches `done` only after `complete_task` passes every layer below; `promptwise spec complete` and the MCP result report which independent layers backed the acceptance (`independence`).

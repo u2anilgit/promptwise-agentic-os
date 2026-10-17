@@ -13,6 +13,7 @@ compose/.env
 # Runtime state written by the core engine / PromptWise plugin hooks
 .promptwise/*.jsonl
 .promptwise/*.sqlite3*
+.promptwise/dashboard_token
 .promptwise/failure_ledger.json
 .promptwise/undo_buffer.json
 .promptwise/jit_grants.json
