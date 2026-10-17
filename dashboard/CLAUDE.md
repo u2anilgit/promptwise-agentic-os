@@ -1,6 +1,6 @@
 # dashboard/ — TypeScript/React Web UI
 
-Scoped context. Read root `CLAUDE.md` and `docs/ARCHITECTURE.md` first. Not built until Phase 6 — this file exists now so the plan for it is locked before code starts.
+Design: `docs/superpowers/specs/2026-10-17-dashboard-design.md` (read API + auth come first, slices 6a-6e). Scoped context. Read root `CLAUDE.md` and `docs/ARCHITECTURE.md` first. Not built until Phase 6 — this file exists now so the plan for it is locked before code starts.
 
 ## Responsibility
 
@@ -12,7 +12,7 @@ Renders `gateway/` REST+WS data. Two-mode design per `research/aug2026-findings.
 
 ## Stack
 
-React 18 + Vite + TypeScript, Tailwind + shadcn/ui, TanStack Query for REST, native WebSocket client for live feeds. No server-side rendering needed — this is an authenticated internal tool, not a public site.
+React 18 + Vite + TypeScript, Tailwind + shadcn/ui, TanStack Query for REST, SSE (EventSource) for live feeds — see docs/superpowers/specs/2026-10-17-dashboard-design.md (D3). No server-side rendering needed — this is an authenticated internal tool, not a public site.
 
 ## Layout (target)
 
