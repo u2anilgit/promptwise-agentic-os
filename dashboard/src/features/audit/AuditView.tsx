@@ -11,8 +11,8 @@ const MAX_ROWS = 500;
 const TAIL_ROWS = 200;
 const RESULT_TONE = { allow: "pass", deny: "block", error: "warn" } as const;
 
-function ChainBanner({ chain }: { chain: Chain }) {
-  if (chain.ok) return <Badge tone="pass">Chain verified</Badge>;
+function ChainBanner({ chain, checkedAt }: { chain: Chain; checkedAt: string | null }) {
+  if (chain.ok) return <Badge tone="pass" title={`Hash chain checked${checkedAt ? ` at ${checkedAt}` : ""}; re-checked periodically`}>Chain verified</Badge>;
   return (
     <div role="alert" className="rounded border border-status-block bg-red-50 p-3 text-status-block">
       <strong>Audit chain broken</strong> at record {chain.broken_at ?? "unknown"}. The log has been altered or
@@ -29,7 +29,7 @@ const FEED_LABEL: Record<FeedState, string> = {
   unavailable: "Gateway credential unavailable",
 };
 
-export function AuditView({ onSignedOut }: { onSignedOut?: () => void }) {
+export function AuditView({ onSignedOut, chainPollMs = 15000 }: { onSignedOut?: () => void; chainPollMs?: number }) {
   const [actionInput, setActionInput] = useState("");
   const [action, setAction] = useState("");
   const [result, setResult] = useState("");
@@ -37,6 +37,7 @@ export function AuditView({ onSignedOut }: { onSignedOut?: () => void }) {
   const [chain, setChain] = useState<Chain | null>(null);
   const [feed, setFeed] = useState<FeedState>("connecting");
   const [error, setError] = useState<string | null>(null);
+  const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const signedOut = useRef(onSignedOut);
   signedOut.current = onSignedOut;
 
@@ -45,10 +46,23 @@ export function AuditView({ onSignedOut }: { onSignedOut?: () => void }) {
     return () => clearTimeout(timer);
   }, [actionInput]);
 
+  // The verdict is only as fresh as its last check: re-ask while the tab stays open, so tampering that
+  // happens after the page loaded still raises the alarm.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      apiGet<AuditResponse>("/api/v1/audit?limit=1&tail=true")
+        .then((page) => { setChain(page.chain); setCheckedAt(new Date().toLocaleTimeString()); })
+        .catch((e) => { if (e instanceof ApiError && e.status === 401) signedOut.current?.(); });
+    }, chainPollMs);
+    return () => clearInterval(timer);
+  }, [chainPollMs]);
+
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
     setError(null);
+    setRecords([]);
+    setChain(null);
     const query = new URLSearchParams({ tail: "true", limit: String(TAIL_ROWS) });
     if (action) query.set("action", action);
     if (result) query.set("result", result);
@@ -68,9 +82,11 @@ export function AuditView({ onSignedOut }: { onSignedOut?: () => void }) {
       if (signal.aborted) return;
       setRecords([...page.records].reverse());
       setChain(page.chain);
+      setCheckedAt(new Date().toLocaleTimeString());
       await streamAudit({
         signal,
         after: String(page.next_cursor),
+        onReset: () => { if (!signal.aborted) setRecords([]); },
         onState: (state) => {
           if (signal.aborted) return;
           setFeed(state);
@@ -92,7 +108,7 @@ export function AuditView({ onSignedOut }: { onSignedOut?: () => void }) {
     <section className="space-y-4">
       <div className="flex flex-wrap items-end gap-4">
         <h2 className="text-xl font-semibold">Audit log</h2>
-        {chain && <ChainBanner chain={chain} />}
+        {chain && <ChainBanner chain={chain} checkedAt={checkedAt} />}
         <Badge tone={feed === "live" ? "pass" : feed === "connecting" || feed === "reconnecting" ? "warn" : "block"}>
           {FEED_LABEL[feed]}
         </Badge>

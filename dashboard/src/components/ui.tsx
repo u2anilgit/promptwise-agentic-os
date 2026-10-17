@@ -11,8 +11,8 @@ const TONE_CLASS: Record<Tone, string> = {
   unknown: "bg-slate-100 text-status-unknown",
 };
 
-export function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
-  return <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${TONE_CLASS[tone]}`}>{children}</span>;
+export function Badge({ tone, title, children }: { tone: Tone; title?: string; children: ReactNode }) {
+  return <span title={title} className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${TONE_CLASS[tone]}`}>{children}</span>;
 }
 
 export function Card({ title, children }: { title?: string; children: ReactNode }) {

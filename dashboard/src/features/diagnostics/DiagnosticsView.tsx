@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { apiGet } from "../../api/client";
+import { useEffect } from "react";
+import { ApiError, apiGet } from "../../api/client";
 import { Badge, type Tone } from "../../components/ui";
 
 interface Diagnostic {
@@ -11,11 +12,15 @@ interface Diagnostic {
 // The status is computed by core (`run_diagnostics`); the UI only maps it to a label and tone.
 const TONE: Record<Diagnostic["status"], Tone> = { PASS: "pass", WARN: "warn", FAIL: "block" };
 
-export function DiagnosticsView() {
+export function DiagnosticsView({ onSignedOut }: { onSignedOut?: () => void }) {
   const { data, error, isFetching, refetch } = useQuery({
     queryKey: ["diagnostics"],
     queryFn: ({ signal }) => apiGet<Diagnostic[]>("/api/v1/diagnostics", { signal }),
   });
+
+  useEffect(() => {
+    if (error instanceof ApiError && error.status === 401) onSignedOut?.();
+  }, [error, onSignedOut]);
 
   return (
     <section className="space-y-4">

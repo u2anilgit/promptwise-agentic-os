@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { clearCredential, getCredential } from "./api/credential";
 import { TokenGate } from "./features/auth/TokenGate";
@@ -7,6 +8,7 @@ import { DiagnosticsView } from "./features/diagnostics/DiagnosticsView";
 type Tab = "audit" | "diagnostics";
 
 export default function App() {
+  const queryClient = useQueryClient();
   const [authed, setAuthed] = useState(() => getCredential() !== null);
   const [tab, setTab] = useState<Tab>("audit");
 
@@ -14,6 +16,7 @@ export default function App() {
 
   const signOut = () => {
     clearCredential();
+    queryClient.clear(); // the next person at this tab must not see cached data
     setAuthed(false);
   };
 
@@ -35,7 +38,7 @@ export default function App() {
           <button onClick={signOut} className="rounded border px-3 py-1">Sign out</button>
         </nav>
       </header>
-      {tab === "audit" ? <AuditView onSignedOut={signOut} /> : <DiagnosticsView />}
+      {tab === "audit" ? <AuditView onSignedOut={signOut} /> : <DiagnosticsView onSignedOut={signOut} />}
     </div>
   );
 }
