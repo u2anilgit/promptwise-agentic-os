@@ -1,6 +1,27 @@
 {
   "components": {
     "schemas": {
+      "AuditPage": {
+        "properties": {
+          "next_cursor": {
+            "title": "Next Cursor",
+            "type": "integer"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/AuditRecord"
+            },
+            "title": "Records",
+            "type": "array"
+          }
+        },
+        "required": [
+          "records",
+          "next_cursor"
+        ],
+        "title": "AuditPage",
+        "type": "object"
+      },
       "AuditRecord": {
         "properties": {
           "action": {
@@ -107,6 +128,34 @@
           "ok"
         ],
         "title": "ChainStatus",
+        "type": "object"
+      },
+      "CheckResult": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "PASS",
+              "WARN",
+              "FAIL"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "message"
+        ],
+        "title": "CheckResult",
         "type": "object"
       },
       "CostRecord": {
@@ -787,8 +836,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "additionalProperties": true,
-                    "type": "object"
+                    "$ref": "#/components/schemas/CheckResult"
                   },
                   "title": "Response Diagnostics Api V1 Diagnostics Get",
                   "type": "array"
@@ -941,6 +989,58 @@
           }
         },
         "summary": "Spec Detail"
+      }
+    },
+    "/api/v1/specs/{spec_id}/history": {
+      "get": {
+        "description": "Audit entries recorded by the spec engine for this spec (exact target match), newest last. This is\nwhere acceptance history and the independence layers behind each completion live.",
+        "operationId": "spec_history_api_v1_specs__spec_id__history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "spec_id",
+            "required": true,
+            "schema": {
+              "title": "Spec Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spec History"
       }
     },
     "/cost-report": {

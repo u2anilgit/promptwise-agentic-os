@@ -186,3 +186,25 @@ def test_event_generator_delivers_records_appended_after_connect(api):
     chunks = asyncio.run(collect())
     thread.join()
     assert any('"action": "late"' in c or '"action":"late"' in c for c in chunks)
+
+
+def test_spec_history_returns_only_that_specs_entries(api):
+    client, _ = api
+    cfg = _cfg()
+    for target in ("spec-1", "spec-10", "spec-1"):
+        record_audit(cfg, actor="spec_engine", action="complete_task", target=target, result="allow", detail={"task_id": "t1"})
+    body = client.get("/api/v1/specs/spec-1/history", headers=AUTH).json()
+    assert [r["target"] for r in body["records"]] == ["spec-1", "spec-1"]
+    assert client.get("/api/v1/specs/none/history", headers=AUTH).json()["records"] == []
+
+
+def test_spec_history_requires_auth_and_bounds_limit(api):
+    client, _ = api
+    assert client.get("/api/v1/specs/spec-1/history").status_code == 401
+    assert client.get("/api/v1/specs/spec-1/history?limit=201", headers=AUTH).status_code == 422
+    assert client.get("/api/v1/specs/spec-1/history?limit=0", headers=AUTH).status_code == 422
+
+
+def test_diagnostics_response_is_in_the_openapi_contract(api):
+    schema = app.openapi()["paths"]["/api/v1/diagnostics"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+    assert schema["items"]["$ref"].endswith("/CheckResult")

@@ -19,6 +19,7 @@ from fastapi.responses import StreamingResponse
 from core.audit.log import ChainStatus, chain_status
 from core.audit.read import AuditPage, log_size, read_audit, read_audit_tail
 from core.diagnostics.checks import run_diagnostics
+from core.diagnostics.models import CheckResult
 from core.policy.engine import load_policy
 from core.spec.engine import SpecStatus, list_specs, spec_status
 from core.spec.models import SpecSummary
@@ -66,6 +67,13 @@ def spec_detail(spec_id: str) -> SpecStatus:
         raise HTTPException(status_code=404, detail="not found") from None
 
 
+@router.get("/specs/{spec_id}/history", response_model=AuditPage)
+def spec_history(spec_id: str, limit: int = Query(100, ge=1, le=200)) -> AuditPage:
+    """Audit entries recorded by the spec engine for this spec (exact target match), newest last. This is
+    where acceptance history and the independence layers behind each completion live."""
+    return read_audit_tail(_config(), limit=limit, target=spec_id)
+
+
 @router.get("/policy")
 def policy() -> dict[str, Any]:
     config = _config()
@@ -75,9 +83,9 @@ def policy() -> dict[str, Any]:
     }
 
 
-@router.get("/diagnostics")
-def diagnostics() -> list[dict[str, Any]]:
-    return [result.model_dump() for result in run_diagnostics(_config())]
+@router.get("/diagnostics", response_model=list[CheckResult])
+def diagnostics() -> list[CheckResult]:
+    return run_diagnostics(_config())
 
 
 async def audit_events(

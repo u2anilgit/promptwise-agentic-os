@@ -46,8 +46,12 @@ def _parse(line: bytes) -> AuditRecord | None:
         return None
 
 
-def _matches(record: AuditRecord, action: str | None, result: str | None) -> bool:
-    return (action is None or record.action == action) and (result is None or record.result == result)
+def _matches(record: AuditRecord, action: str | None, result: str | None, target: str | None = None) -> bool:
+    return (
+        (action is None or record.action == action)
+        and (result is None or record.result == result)
+        and (target is None or record.target == target)
+    )
 
 
 def _skip_oversized_line(path: Path, position: int) -> int:
@@ -66,7 +70,8 @@ def _skip_oversized_line(path: Path, position: int) -> int:
 
 
 def read_audit(
-    config: dict[str, Any], after: int = 0, limit: int = 100, action: str | None = None, result: str | None = None
+    config: dict[str, Any], after: int = 0, limit: int = 100, action: str | None = None, result: str | None = None,
+    target: str | None = None,
 ) -> AuditPage:
     path: Path = _log_path(config)
     limit = _clamp(limit)
@@ -93,7 +98,7 @@ def read_audit(
         if not line.strip():
             continue
         record = _parse(line)
-        if record is not None and _matches(record, action, result):
+        if record is not None and _matches(record, action, result, target):
             records.append(record)
     if cursor == after and len(data) >= MAX_READ_BYTES and b"\n" not in data:
         cursor = _skip_oversized_line(path, after + len(data))
@@ -101,7 +106,8 @@ def read_audit(
 
 
 def read_audit_tail(
-    config: dict[str, Any], limit: int = 100, action: str | None = None, result: str | None = None
+    config: dict[str, Any], limit: int = 100, action: str | None = None, result: str | None = None,
+    target: str | None = None,
 ) -> AuditPage:
     """The newest `limit` matching records, oldest first; next_cursor is the end of the last complete line."""
     path: Path = _log_path(config)
@@ -133,7 +139,7 @@ def read_audit_tail(
             if not line.strip():
                 continue
             record = _parse(line)
-            if record is not None and _matches(record, action, result):
+            if record is not None and _matches(record, action, result, target):
                 found.append(record)
         if len(found) >= limit or start == 0 or window >= MAX_READ_BYTES:
             return AuditPage(records=found[-limit:], next_cursor=start + complete_end)

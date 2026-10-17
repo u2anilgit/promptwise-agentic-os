@@ -106,6 +106,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/specs/{spec_id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Spec History
+         * @description Audit entries recorded by the spec engine for this spec (exact target match), newest last. This is
+         *     where acceptance history and the independence layers behind each completion live.
+         */
+        get: operations["spec_history_api_v1_specs__spec_id__history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cost-report": {
         parameters: {
             query?: never;
@@ -195,6 +216,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AuditPage */
+        AuditPage: {
+            /** Next Cursor */
+            next_cursor: number;
+            /** Records */
+            records: components["schemas"]["AuditRecord"][];
+        };
         /** AuditRecord */
         AuditRecord: {
             /** Action */
@@ -238,6 +266,18 @@ export interface components {
             broken_at?: number | null;
             /** Ok */
             ok: boolean;
+        };
+        /** CheckResult */
+        CheckResult: {
+            /** Message */
+            message: string;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "PASS" | "WARN" | "FAIL";
         };
         /** CostRecord */
         CostRecord: {
@@ -522,9 +562,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["CheckResult"][];
                 };
             };
         };
@@ -622,6 +660,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SpecStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    spec_history_api_v1_specs__spec_id__history_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                spec_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPage"];
                 };
             };
             /** @description Validation Error */
