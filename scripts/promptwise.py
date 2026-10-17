@@ -69,6 +69,49 @@ def dashboard_token() -> None:
     typer.echo(value)
 
 
+usage_app = typer.Typer(help="Agent-reported model usage and cost per completed task")
+app.add_typer(usage_app, name="usage")
+
+
+@usage_app.command("record")
+def usage_record(
+    tier: str = typer.Option(..., help="Catalog tier name"),
+    tokens_in: int = typer.Option(..., help="Input tokens"),
+    tokens_out: int = typer.Option(..., help="Output tokens"),
+    agent: str = typer.Option("cli", help="Reporting agent"),
+    task_ref: str = typer.Option("", help="Task identifier (enables cost per task)"),
+    spec_id: str = typer.Option("", help="Spec this belongs to"),
+) -> None:
+    """Record token usage (self-reported). Cost is fixed from the catalog tier at this moment."""
+    from core.routing.usage import record_usage
+
+    try:
+        event = record_usage(tier, tokens_in, tokens_out, agent=agent, task_ref=task_ref or None, spec_id=spec_id or None)
+    except ValueError as exc:
+        typer.echo(f"error: {exc}")
+        raise typer.Exit(code=2)
+    typer.echo(f"recorded #{event.id}: {event.tier} {event.tokens_in}/{event.tokens_out} tokens, ${event.cost_usd}")
+
+
+@usage_app.command("report")
+def usage_report_cmd(days: int = typer.Option(7, help="Window in days (1-365)")) -> None:
+    """Totals, by tier and by agent, and cost per completed task over the window."""
+    from core.routing.usage import usage_report
+
+    try:
+        report = usage_report(days=days)
+    except ValueError as exc:
+        typer.echo(f"error: {exc}")
+        raise typer.Exit(code=2)
+    typer.echo(f"last {report.days} day(s): events {report.events}, tasks {report.tasks}, total ${report.total_cost_usd}")
+    per_task = "n/a (no task references)" if report.cost_per_task_usd is None else f"${report.cost_per_task_usd}"
+    typer.echo(f"cost per task: {per_task}")
+    for name, bucket in sorted(report.by_tier.items()):
+        typer.echo(f"  tier {name}: {bucket.events} events, ${bucket.cost_usd}")
+    for name, bucket in sorted(report.by_agent.items()):
+        typer.echo(f"  agent {name}: {bucket.events} events, ${bucket.cost_usd}")
+
+
 spec_app = typer.Typer(help="Spec-driven workflow: specify -> plan -> tasks -> complete -> verify")
 app.add_typer(spec_app, name="spec")
 

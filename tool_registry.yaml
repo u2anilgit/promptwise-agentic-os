@@ -56,3 +56,7 @@ tools:
     version: 0.1.0
     enabled: true
     description_sha256: bafe9e3d2355308a02c325f1077f94af3ee3b0aec0678c4e918a919980a1060f
+  record_usage:
+    version: 0.1.0
+    enabled: true
+    description_sha256: 532d7fdb6fcdfd1620b0a49b72ed094a8938c8d939d5aa6fa859876cfbd4360f

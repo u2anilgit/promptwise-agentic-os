@@ -23,6 +23,7 @@ from core.ingestion.sweep import run_ingestion_sweep as _run_ingestion_sweep
 from core.index.query import query_code_index as _query_code_index
 from core.memory.memory import query_memory as _query_memory
 from core.memory.memory import record_memory as _record_memory
+from core.routing.usage import record_usage as _record_usage
 from core.security.untrusted import tag_untrusted
 from core.spec import engine as _spec
 from core.spec.models import AcceptanceCheck, TaskNode
@@ -131,6 +132,32 @@ def record_memory(text: str, scope: str, root: str = "", session_id: str = "") -
         return {"facts": [f.model_dump() for f in facts]}
 
     return _run("record_memory", {"root": root}, body)
+
+
+@mcp_app.tool()
+def record_usage(
+    tier: str, tokens_in: int, tokens_out: int, agent: str = "unknown", task_ref: str = "", spec_id: str = "", root: str = ""
+) -> dict:
+    """Report the model tokens you just used so the dashboard can show cost per completed task.
+    Usage is self-reported: report honestly after each model call or task.
+
+    Args:
+        tier: Model tier name from the catalog (e.g. "local-small", "cloud-premium"); unknown tiers are rejected.
+        tokens_in: Input tokens used (integer, 0 to 1,000,000,000).
+        tokens_out: Output tokens used (integer, 0 to 1,000,000,000).
+        agent: Name of the reporting agent (max 200 characters).
+        task_ref: Your task identifier, so cost per task can be computed (max 200 characters).
+        spec_id: Spec this work belongs to, if any (max 200 characters).
+        root: Project directory; defaults to the server's root.
+    """
+    def body(c: GovernedCall) -> dict:
+        event = _record_usage(
+            tier, tokens_in, tokens_out, agent=agent or "unknown", task_ref=task_ref or None,
+            spec_id=spec_id or None, config=c.config, root=c.root,
+        )
+        return {"event": event.model_dump()}
+
+    return _run("record_usage", {"root": root}, body)
 
 
 @mcp_app.tool()
