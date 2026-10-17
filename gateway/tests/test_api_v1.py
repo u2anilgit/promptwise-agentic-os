@@ -208,3 +208,16 @@ def test_spec_history_requires_auth_and_bounds_limit(api):
 def test_diagnostics_response_is_in_the_openapi_contract(api):
     schema = app.openapi()["paths"]["/api/v1/diagnostics"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
     assert schema["items"]["$ref"].endswith("/CheckResult")
+
+
+def test_spec_history_can_be_narrowed_to_accepted_completions(api):
+    client, _ = api
+    cfg = _cfg()
+    record_audit(cfg, actor="spec_engine", action="complete_task", target="s1", result="allow", detail={"task_id": "t1"})
+    for _ in range(5):
+        record_audit(cfg, actor="spec_engine", action="complete_task", target="s1", result="deny", detail={"task_id": "t1"})
+    body = client.get("/api/v1/specs/s1/history?action=complete_task&result=allow&limit=1", headers=AUTH).json()
+    assert [r["result"] for r in body["records"]] == ["allow"]
+    assert body["truncated"] is False
+    wide = client.get("/api/v1/specs/s1/history?limit=2", headers=AUTH).json()
+    assert wide["truncated"] is True

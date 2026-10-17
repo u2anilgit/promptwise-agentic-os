@@ -68,10 +68,16 @@ def spec_detail(spec_id: str) -> SpecStatus:
 
 
 @router.get("/specs/{spec_id}/history", response_model=AuditPage)
-def spec_history(spec_id: str, limit: int = Query(100, ge=1, le=200)) -> AuditPage:
+def spec_history(
+    spec_id: str,
+    limit: int = Query(100, ge=1, le=200),
+    action: str | None = Query(None, max_length=100),
+    result: Literal["allow", "deny", "error"] | None = None,
+) -> AuditPage:
     """Audit entries recorded by the spec engine for this spec (exact target match), newest last. This is
-    where acceptance history and the independence layers behind each completion live."""
-    return read_audit_tail(_config(), limit=limit, target=spec_id)
+    where acceptance history and the independence layers behind each completion live. `truncated` says the
+    result is partial (more matches than `limit`, or the scan budget ended before the start of the log)."""
+    return read_audit_tail(_config(), limit=limit, action=action, result=result, target=spec_id)
 
 
 @router.get("/policy")

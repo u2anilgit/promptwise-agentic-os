@@ -13,6 +13,11 @@
             },
             "title": "Records",
             "type": "array"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
           }
         },
         "required": [
@@ -96,6 +101,11 @@
             },
             "title": "Records",
             "type": "array"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
           }
         },
         "required": [
@@ -993,7 +1003,7 @@
     },
     "/api/v1/specs/{spec_id}/history": {
       "get": {
-        "description": "Audit entries recorded by the spec engine for this spec (exact target match), newest last. This is\nwhere acceptance history and the independence layers behind each completion live.",
+        "description": "Audit entries recorded by the spec engine for this spec (exact target match), newest last. This is\nwhere acceptance history and the independence layers behind each completion live. `truncated` says the\nresult is partial (more matches than `limit`, or the scan budget ended before the start of the log).",
         "operationId": "spec_history_api_v1_specs__spec_id__history_get",
         "parameters": [
           {
@@ -1015,6 +1025,44 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "in": "query",
+            "name": "result",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "allow",
+                    "deny",
+                    "error"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Result"
             }
           }
         ],

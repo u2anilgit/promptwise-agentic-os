@@ -116,7 +116,8 @@ export interface paths {
         /**
          * Spec History
          * @description Audit entries recorded by the spec engine for this spec (exact target match), newest last. This is
-         *     where acceptance history and the independence layers behind each completion live.
+         *     where acceptance history and the independence layers behind each completion live. `truncated` says the
+         *     result is partial (more matches than `limit`, or the scan budget ended before the start of the log).
          */
         get: operations["spec_history_api_v1_specs__spec_id__history_get"];
         put?: never;
@@ -222,6 +223,11 @@ export interface components {
             next_cursor: number;
             /** Records */
             records: components["schemas"]["AuditRecord"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /** AuditRecord */
         AuditRecord: {
@@ -259,6 +265,11 @@ export interface components {
             next_cursor: number;
             /** Records */
             records: components["schemas"]["AuditRecord"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /** ChainStatus */
         ChainStatus: {
@@ -677,6 +688,8 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                action?: string | null;
+                result?: ("allow" | "deny" | "error") | null;
             };
             header?: never;
             path: {
