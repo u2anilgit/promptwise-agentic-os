@@ -128,6 +128,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usage */
+        get: operations["usage_api_v1_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cost-report": {
         parameters: {
             query?: never;
@@ -270,6 +287,17 @@ export interface components {
              * @default false
              */
             truncated: boolean;
+        };
+        /** Bucket */
+        Bucket: {
+            /** Cost Usd */
+            cost_usd: number;
+            /** Events */
+            events: number;
+            /** Tokens In */
+            tokens_in: number;
+            /** Tokens Out */
+            tokens_out: number;
         };
         /** ChainStatus */
         ChainStatus: {
@@ -432,6 +460,13 @@ export interface components {
             /** Task Id */
             task_id: string;
         };
+        /** TierInfo */
+        TierInfo: {
+            /** Name */
+            name: string;
+            /** Requires Cloud */
+            requires_cloud: boolean;
+        };
         /** ToolRunResult */
         ToolRunResult: {
             /** Error Kind */
@@ -449,6 +484,65 @@ export interface components {
             ran: boolean;
             /** Tool */
             tool: string;
+        };
+        /** UsageEvent */
+        UsageEvent: {
+            /** Agent */
+            agent: string;
+            /** Cost Usd */
+            cost_usd: number;
+            /** Id */
+            id: number;
+            /** Spec Id */
+            spec_id?: string | null;
+            /** Task Ref */
+            task_ref?: string | null;
+            /** Tier */
+            tier: string;
+            /** Tokens In */
+            tokens_in: number;
+            /** Tokens Out */
+            tokens_out: number;
+            /** Ts */
+            ts: number;
+        };
+        /** UsageReport */
+        UsageReport: {
+            /** By Agent */
+            by_agent: {
+                [key: string]: components["schemas"]["Bucket"];
+            };
+            /** By Tier */
+            by_tier: {
+                [key: string]: components["schemas"]["Bucket"];
+            };
+            /** Cost Per Task Usd */
+            cost_per_task_usd: number | null;
+            /** Days */
+            days: number;
+            /** Events */
+            events: number;
+            /** Recent */
+            recent: components["schemas"]["UsageEvent"][];
+            /** Tasks */
+            tasks: number;
+            /** Tokens In */
+            tokens_in: number;
+            /** Tokens Out */
+            tokens_out: number;
+            /** Total Cost Usd */
+            total_cost_usd: number;
+        };
+        /** UsageResponse */
+        UsageResponse: {
+            report: components["schemas"]["UsageReport"];
+            /**
+             * Self Reported
+             * @default true
+             */
+            self_reported: boolean;
+            /** Tiers */
+            tiers: components["schemas"]["TierInfo"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -706,6 +800,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    usage_api_v1_usage_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageResponse"];
                 };
             };
             /** @description Validation Error */

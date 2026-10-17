@@ -116,6 +116,34 @@
         "title": "AuditResponse",
         "type": "object"
       },
+      "Bucket": {
+        "properties": {
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "events": {
+            "title": "Events",
+            "type": "integer"
+          },
+          "tokens_in": {
+            "title": "Tokens In",
+            "type": "integer"
+          },
+          "tokens_out": {
+            "title": "Tokens Out",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "events",
+          "tokens_in",
+          "tokens_out",
+          "cost_usd"
+        ],
+        "title": "Bucket",
+        "type": "object"
+      },
       "ChainStatus": {
         "properties": {
           "broken_at": {
@@ -498,6 +526,24 @@
         "title": "TaskRecord",
         "type": "object"
       },
+      "TierInfo": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "requires_cloud": {
+            "title": "Requires Cloud",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "requires_cloud"
+        ],
+        "title": "TierInfo",
+        "type": "object"
+      },
       "ToolRunResult": {
         "properties": {
           "error_kind": {
@@ -543,6 +589,170 @@
           "output"
         ],
         "title": "ToolRunResult",
+        "type": "object"
+      },
+      "UsageEvent": {
+        "properties": {
+          "agent": {
+            "title": "Agent",
+            "type": "string"
+          },
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "spec_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec Id"
+          },
+          "task_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Ref"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "string"
+          },
+          "tokens_in": {
+            "title": "Tokens In",
+            "type": "integer"
+          },
+          "tokens_out": {
+            "title": "Tokens Out",
+            "type": "integer"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "tier",
+          "tokens_in",
+          "tokens_out",
+          "cost_usd",
+          "agent"
+        ],
+        "title": "UsageEvent",
+        "type": "object"
+      },
+      "UsageReport": {
+        "properties": {
+          "by_agent": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Bucket"
+            },
+            "title": "By Agent",
+            "type": "object"
+          },
+          "by_tier": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Bucket"
+            },
+            "title": "By Tier",
+            "type": "object"
+          },
+          "cost_per_task_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Per Task Usd"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "events": {
+            "title": "Events",
+            "type": "integer"
+          },
+          "recent": {
+            "items": {
+              "$ref": "#/components/schemas/UsageEvent"
+            },
+            "title": "Recent",
+            "type": "array"
+          },
+          "tasks": {
+            "title": "Tasks",
+            "type": "integer"
+          },
+          "tokens_in": {
+            "title": "Tokens In",
+            "type": "integer"
+          },
+          "tokens_out": {
+            "title": "Tokens Out",
+            "type": "integer"
+          },
+          "total_cost_usd": {
+            "title": "Total Cost Usd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "days",
+          "events",
+          "tasks",
+          "tokens_in",
+          "tokens_out",
+          "total_cost_usd",
+          "cost_per_task_usd",
+          "by_tier",
+          "by_agent",
+          "recent"
+        ],
+        "title": "UsageReport",
+        "type": "object"
+      },
+      "UsageResponse": {
+        "properties": {
+          "report": {
+            "$ref": "#/components/schemas/UsageReport"
+          },
+          "self_reported": {
+            "default": true,
+            "title": "Self Reported",
+            "type": "boolean"
+          },
+          "tiers": {
+            "items": {
+              "$ref": "#/components/schemas/TierInfo"
+            },
+            "title": "Tiers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "report",
+          "tiers"
+        ],
+        "title": "UsageResponse",
         "type": "object"
       },
       "ValidationError": {
@@ -1089,6 +1299,48 @@
           }
         },
         "summary": "Spec History"
+      }
+    },
+    "/api/v1/usage": {
+      "get": {
+        "operationId": "usage_api_v1_usage_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Usage"
       }
     },
     "/cost-report": {

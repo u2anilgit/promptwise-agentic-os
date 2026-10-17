@@ -21,6 +21,9 @@ from core.audit.read import AuditPage, log_size, read_audit, read_audit_tail
 from core.diagnostics.checks import run_diagnostics
 from core.diagnostics.models import CheckResult
 from core.policy.engine import load_policy
+from core.routing.catalog import load_catalog
+from core.routing.usage import UsageReport, usage_report
+from pydantic import BaseModel
 from core.spec.engine import SpecStatus, list_specs, spec_status
 from core.spec.models import SpecSummary
 from gateway.auth import require_token
@@ -78,6 +81,28 @@ def spec_history(
     where acceptance history and the independence layers behind each completion live. `truncated` says the
     result is partial (more matches than `limit`, or the scan budget ended before the start of the log)."""
     return read_audit_tail(_config(), limit=limit, action=action, result=result, target=spec_id)
+
+
+class TierInfo(BaseModel):
+    name: str
+    requires_cloud: bool
+
+
+class UsageResponse(BaseModel):
+    report: UsageReport
+    tiers: list[TierInfo]
+    # Usage comes from agents calling record_usage; the gateway does not see model traffic.
+    self_reported: bool = True
+
+
+@router.get("/usage", response_model=UsageResponse)
+def usage(days: int = Query(7, ge=1, le=365)) -> UsageResponse:
+    config = _config()
+    catalog = load_catalog(config)
+    return UsageResponse(
+        report=usage_report(days=days, config=config, root=Path.cwd()),
+        tiers=[TierInfo(name=name, requires_cloud=tier.requires_cloud) for name, tier in catalog.items()],
+    )
 
 
 @router.get("/policy")

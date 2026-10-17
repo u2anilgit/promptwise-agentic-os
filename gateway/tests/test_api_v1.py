@@ -221,3 +221,32 @@ def test_spec_history_can_be_narrowed_to_accepted_completions(api):
     assert body["truncated"] is False
     wide = client.get("/api/v1/specs/s1/history?limit=2", headers=AUTH).json()
     assert wide["truncated"] is True
+
+
+def test_usage_view_reports_totals_tiers_and_flags_cloud_tiers(api):
+    from core.routing.usage import record_usage
+
+    client, tmp = api
+    cfg = _cfg()
+    record_usage("local-small", 1000, 0, agent="claude", task_ref="T-1", config=cfg, root=tmp)
+    record_usage("cloud-premium", 1000, 1000, agent="claude", task_ref="T-1", config=cfg, root=tmp)
+    body = client.get("/api/v1/usage", headers=AUTH).json()
+    assert body["report"]["events"] == 2 and body["report"]["tasks"] == 1
+    assert body["report"]["cost_per_task_usd"] == body["report"]["total_cost_usd"]
+    tiers = {t["name"]: t["requires_cloud"] for t in body["tiers"]}
+    assert tiers["local-small"] is False and tiers["cloud-premium"] is True
+    assert body["self_reported"] is True
+
+
+def test_usage_view_requires_auth_and_bounds_days(api):
+    client, _ = api
+    assert client.get("/api/v1/usage").status_code == 401
+    for days in (0, 366, -1):
+        assert client.get(f"/api/v1/usage?days={days}", headers=AUTH).status_code == 422
+    assert client.get("/api/v1/usage?days=30", headers=AUTH).status_code == 200
+
+
+def test_usage_view_with_no_data_is_zeros(api):
+    client, _ = api
+    body = client.get("/api/v1/usage", headers=AUTH).json()
+    assert body["report"]["events"] == 0 and body["report"]["cost_per_task_usd"] is None
