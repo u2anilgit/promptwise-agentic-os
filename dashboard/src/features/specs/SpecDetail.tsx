@@ -6,7 +6,7 @@ import { Badge, type Tone } from "../../components/ui";
 
 type SpecStatus = components["schemas"]["SpecStatus"];
 type AuditRecord = components["schemas"]["AuditRecord"];
-type History = { records: AuditRecord[] };
+type History = components["schemas"]["AuditPage"];
 
 const TASK_TONE: Record<string, Tone> = { done: "pass", pending: "unknown", error: "block" };
 const BASELINE: Record<string, { label: string; tone: Tone }> = {
@@ -20,25 +20,35 @@ const LAYERS: Array<[string, string]> = [
   ["reviewer", "reviewer"],
 ];
 
+const ENGINE = "spec_engine";
+
 /** The layers behind a task's acceptance are read from the spec engine's own audit entry for its latest
- * accepted completion; nothing is recomputed here, and a task core does not report as done shows none. */
-function layersFor(taskId: string, done: boolean, records: AuditRecord[]): string[] {
-  if (!done) return [];
+ * accepted completion; nothing is recomputed here. `null` means the task is done in core but no such
+ * entry was loaded: that is "record not loaded", never "accepted with nothing". Entries written by any
+ * other actor are ignored. */
+function layersFor(taskId: string, records: AuditRecord[]): string[] | null {
   for (let i = records.length - 1; i >= 0; i--) {
     const r = records[i];
-    if (r.action !== "complete_task" || r.result !== "allow" || r.detail.task_id !== taskId) continue;
+    if (r.actor !== ENGINE || r.action !== "complete_task" || r.result !== "allow" || r.detail.task_id !== taskId) continue;
     const independence = r.detail.independence;
     if (independence && typeof independence === "object") {
       return LAYERS.filter(([key]) => (independence as Record<string, unknown>)[key] === true).map(([, label]) => label);
     }
     return [];
   }
-  return [];
+  return null;
 }
 
 function reasonsOf(record: AuditRecord): string[] {
   const reasons = record.detail.reasons;
   return Array.isArray(reasons) ? reasons.filter((r): r is string => typeof r === "string") : [];
+}
+
+function AcceptedWith({ layers, loading }: { layers: string[] | null; loading: boolean }) {
+  if (loading) return null;
+  if (layers === null) return <Badge tone="warn">acceptance record not loaded</Badge>;
+  if (layers.length === 0) return <span className="text-xs text-slate-500">no independent layers</span>;
+  return <>{layers.map((label) => <Badge key={label} tone="pass">{label}</Badge>)}</>;
 }
 
 interface Props {
@@ -58,12 +68,20 @@ export function SpecDetail({ specId, onBack, onSignedOut }: Props) {
   const history = useQuery({
     queryKey: ["spec-history", specId],
     queryFn: ({ signal }) => apiGet<History>(`/api/v1/specs/${encoded}/history?limit=200`, { signal }),
+    staleTime: 10_000,
+  });
+  // Accepted completions get their own narrow query: a long run of denied retries must not push them out.
+  const accepted = useQuery({
+    queryKey: ["spec-accepted", specId],
+    queryFn: ({ signal }) =>
+      apiGet<History>(`/api/v1/specs/${encoded}/history?limit=200&action=complete_task&result=allow`, { signal }),
+    staleTime: 10_000,
   });
 
   useEffect(() => {
-    const signedOut = [spec.error, history.error].some((e) => e instanceof ApiError && e.status === 401);
+    const signedOut = [spec.error, history.error, accepted.error].some((e) => e instanceof ApiError && e.status === 401);
     if (signedOut) onSignedOut();
-  }, [spec.error, history.error, onSignedOut]);
+  }, [spec.error, history.error, accepted.error, onSignedOut]);
 
   const back = (
     <button onClick={onBack} className="rounded border px-3 py-1 text-sm">Back to specs</button>
@@ -79,6 +97,7 @@ export function SpecDetail({ specId, onBack, onSignedOut }: Props) {
 
   const s = spec.data;
   const records = history.data?.records ?? [];
+  const acceptedRecords = accepted.data?.records ?? [];
 
   return (
     <section className="space-y-6">
@@ -118,9 +137,7 @@ export function SpecDetail({ specId, onBack, onSignedOut }: Props) {
                 <td className="break-all p-2">{t.requirement_ids.join(", ")}</td>
                 <td className="break-all p-2">{t.depends_on.join(", ") || "none"}</td>
                 <td className="space-x-1 p-2">
-                  {layersFor(t.task_id, t.status === "done", records).map((label) => (
-                    <Badge key={label} tone="pass">{label}</Badge>
-                  ))}
+                  {t.status === "done" && <AcceptedWith layers={layersFor(t.task_id, acceptedRecords)} loading={accepted.isLoading} />}
                 </td>
               </tr>
             ))}
@@ -162,9 +179,10 @@ export function SpecDetail({ specId, onBack, onSignedOut }: Props) {
                 <span className="font-medium">{r.action}</span>
                 <Badge tone={RESULT_TONE[r.result] ?? "unknown"}>{r.result}</Badge>
                 {typeof r.detail.task_id === "string" && <span className="break-all text-slate-600">{r.detail.task_id}</span>}
+                {r.actor !== ENGINE && <Badge tone="warn">not from the spec engine</Badge>}
               </div>
-              {reasonsOf(r).map((reason) => (
-                <div key={reason} className="break-all text-status-block">{reason}</div>
+              {reasonsOf(r).map((reason, index) => (
+                <div key={`${index}-${reason}`} className="break-all text-status-block">{reason}</div>
               ))}
               {Object.keys(r.detail).length > 0 && (
                 <details className="text-xs text-slate-600">
@@ -175,6 +193,9 @@ export function SpecDetail({ specId, onBack, onSignedOut }: Props) {
             </li>
           ))}
         </ul>
+        {history.data?.truncated && (
+          <p className="text-xs text-slate-500">Older activity is not shown (the most recent {records.length} entries are listed).</p>
+        )}
         {records.length === 0 && !history.error && <p className="text-slate-500">No recorded activity.</p>}
       </div>
     </section>

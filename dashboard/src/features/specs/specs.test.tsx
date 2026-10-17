@@ -23,7 +23,6 @@ describe("parseRoute", () => {
     ["#/diagnostics", { name: "diagnostics" }],
     ["#/specs", { name: "specs" }],
     ["#/specs/abc-123", { name: "spec", id: "abc-123" }],
-    ["#/specs/a%20b%2Fc", { name: "spec", id: "a b/c" }],
     ["#/specs/%E0%A4%A", { name: "specs" }],
     ["#/unknown", { name: "audit" }],
     ["#/specs/", { name: "specs" }],

@@ -6,6 +6,10 @@ export type Route =
   | { name: "specs" }
   | { name: "spec"; id: string };
 
+// Spec ids are short server-generated tokens. Anything else (dots, slashes, spaces, long strings) is not a
+// valid id and must not become a request path.
+const SPEC_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
 /** Tiny hash router (no dependency). Anything unrecognised or malformed falls back to the audit view. */
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, "").split("/");
@@ -15,7 +19,8 @@ export function parseRoute(hash: string): Route {
     case "specs": {
       if (parts.length < 2 || parts[1] === "") return { name: "specs" };
       try {
-        return { name: "spec", id: decodeURIComponent(parts.slice(1).join("/")) };
+        const id = decodeURIComponent(parts.slice(1).join("/"));
+        return SPEC_ID.test(id) ? { name: "spec", id } : { name: "specs" };
       } catch {
         return { name: "specs" };
       }
