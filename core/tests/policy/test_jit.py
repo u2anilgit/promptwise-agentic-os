@@ -48,3 +48,29 @@ def test_multiple_grants_for_different_scopes_are_independent(tmp_path):
     assert check_jit_grant(config, "shell.exec.git") is True
     assert check_jit_grant(config, "fs.write.tmp") is True
     assert check_jit_grant(config, "shell.exec.rm") is False
+
+
+def test_revoke_jit_grant_removes_only_that_scope(tmp_path):
+    from core.policy.jit import revoke_jit_grant
+
+    config = _config(tmp_path)
+    grant_jit_permission(config, "a", 60)
+    grant_jit_permission(config, "b", 60)
+    assert revoke_jit_grant(config, "a") is True
+    assert check_jit_grant(config, "a") is False
+    assert check_jit_grant(config, "b") is True
+    assert revoke_jit_grant(config, "a") is False
+
+
+def test_revoking_an_expired_grant_reports_false(tmp_path, monkeypatch):
+    from datetime import timedelta
+
+    from core.policy import jit
+    from core.policy.jit import revoke_jit_grant
+
+    config = _config(tmp_path)
+    grant_jit_permission(config, "a", 1)
+    later = jit._now() + timedelta(seconds=5)
+    monkeypatch.setattr(jit, "_now", lambda: later)
+    assert revoke_jit_grant(config, "a") is False
+    assert check_jit_grant(config, "a") is False

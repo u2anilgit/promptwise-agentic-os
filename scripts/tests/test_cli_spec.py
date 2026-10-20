@@ -122,3 +122,45 @@ def test_complete_reports_independence_layers_and_reviewer_notes(proj):
 def _specify_one():
     result = runner.invoke(app, ["spec", "specify", "a", "-r", "The system shall do A."])
     return next(line.split()[-1] for line in result.stdout.splitlines() if line.startswith("spec_id"))
+
+
+def test_allow_amend_grants_one_agent_amend(proj):
+    from core.config.resolve import resolve_config_auto
+    from core.policy.jit import check_jit_grant
+    from core.spec.engine import amend_grant_scope
+
+    spec_id = _specify()
+    result = runner.invoke(app, ["spec", "allow-amend", spec_id, "--ttl", "120"])
+    assert result.exit_code == 0 and "one amend" in result.stdout
+    assert check_jit_grant(resolve_config_auto(), amend_grant_scope(spec_id))
+    audit = (proj / ".promptwise" / "agentic_audit.jsonl").read_text(encoding="utf-8")
+    assert '"action":"jit_grant"' in audit.replace(" ", "")
+
+
+def test_allow_amend_for_an_unknown_spec_fails_without_granting(proj):
+    from core.config.resolve import resolve_config_auto
+    from core.policy.jit import check_jit_grant
+    from core.spec.engine import amend_grant_scope
+
+    result = runner.invoke(app, ["spec", "allow-amend", "ghost"])
+    assert result.exit_code != 0
+    assert not check_jit_grant(resolve_config_auto(), amend_grant_scope("ghost"))
+
+
+def test_allow_amend_writes_the_grant_where_the_gateway_reads_it(proj, monkeypatch):
+    """Hardened setup: the operator file moves JIT grants and the audit log out of the project tree."""
+    from core.policy.jit import check_jit_grant
+    from core.spec.engine import amend_grant_scope
+    from gateway.mcp_guard import operator_config, pinned_config
+
+    state = proj.parent / f"{proj.name}-operator-state"
+    operator_file = proj.parent / f"{proj.name}-operator.yaml"
+    operator_file.write_text(
+        f"policy:\n  jit_grants_path: '{(state / 'grants.json').as_posix()}'\naudit:\n  log_path: '{(state / 'audit.jsonl').as_posix()}'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PROMPTWISE_OPERATOR_CONFIG", str(operator_file))
+    spec_id = _specify()
+    assert runner.invoke(app, ["spec", "allow-amend", spec_id]).exit_code == 0
+    assert check_jit_grant(pinned_config(operator_config()), amend_grant_scope(spec_id))
+    assert (state / "grants.json").exists() and '"jit_grant"' in (state / "audit.jsonl").read_text(encoding="utf-8")

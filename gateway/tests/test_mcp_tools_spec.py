@@ -90,10 +90,17 @@ async def test_amend_check_over_mcp_reopens_work_and_is_audited(operator):
     sid = await _tasked(operator)
     await _call("complete_task", {"spec_id": sid, "task_id": "t1", "evidence": "e"})
     (operator / "check_login.py").write_text("import sys\nsys.exit(0)  # revised\n", encoding="utf-8")
-    amended = await _call("amend_check", {
+    args = {
         "spec_id": sid, "requirement_id": "R1", "command": "python check_login.py",
         "files": ["check_login.py"], "reason": "login flow revised", "expect_baseline": "pass",
-    })
+    }
+    assert "grant" in (await _call("amend_check", args))["error"]  # an agent cannot amend unattended
+    from core.policy.jit import grant_jit_permission
+    from core.spec.engine import amend_grant_scope
+    from gateway.mcp_guard import operator_config, pinned_config
+
+    grant_jit_permission(pinned_config(operator_config()), amend_grant_scope(sid), 300)
+    amended = await _call("amend_check", args)
     assert amended["file_hashes"]["check_login.py"]
     assert (await _call("complete_task", {"spec_id": sid, "task_id": "t1", "evidence": "e"}))["accepted"] is True
 

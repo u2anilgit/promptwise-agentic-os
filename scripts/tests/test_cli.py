@@ -132,3 +132,24 @@ def test_mcp_tools_lists_every_live_tool_with_its_pin_status():
     for name in ("verify_output", "query_memory", "complete_task", "amend_check"):
         assert f"{name} - pinned" in result.stdout
     assert "UNPINNED" not in result.stdout and "MISMATCH" not in result.stdout
+
+
+def test_ingest_refreshes_the_code_index_for_a_root(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "m.py").write_text("def ingested_symbol():\n    pass\n", encoding="utf-8")
+    result = runner.invoke(app, ["ingest", str(tmp_path)])
+    assert result.exit_code == 0, result.stdout
+    assert "code index refreshed" in result.stdout
+    from core.index.query import query_code_index
+
+    assert query_code_index("ingested_symbol", root=tmp_path)
+
+
+def test_ingest_exits_one_when_a_step_reports_errors(tmp_path, monkeypatch):
+    import core.ingestion.sweep as sweep
+    from core.ingestion.models import IngestionResult
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sweep, "run_ingestion_sweep", lambda root, **kw: IngestionResult(root=str(root), errors=["boom"]))
+    result = runner.invoke(app, ["ingest", str(tmp_path)])
+    assert result.exit_code == 1 and "boom" in result.stdout

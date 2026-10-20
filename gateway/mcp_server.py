@@ -324,7 +324,9 @@ def converge_feature(spec_id: str, root: str = "") -> dict:
 def amend_check(spec_id: str, requirement_id: str, command: str, files: list[str], reason: str, expect_baseline: str = "fail", root: str = "") -> dict:
     """Deliberately replace a frozen acceptance check (audited with old and
     new hashes and your reason). Tasks that relied on the old check are
-    reopened. Use only when the requirement genuinely changed.
+    reopened. Use only when the requirement genuinely changed. Needs a
+    one-shot operator grant: ask the human to run
+    `promptwise spec allow-amend <spec_id>`; without it the call returns an error.
 
     Args:
         spec_id: Id returned by specify_feature.

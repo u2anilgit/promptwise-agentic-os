@@ -34,6 +34,7 @@ spec:
   require_mutation: false
   require_reviewer: false
   allow_regression_guards: true
+  amend_requires_grant: true  # agents need `promptwise spec allow-amend <id>` (one-shot, time-boxed) to replace a frozen check
 security:
   known_bad_packages_path: security/known_bad_packages.yaml
   lockfile_path: requirements.lock

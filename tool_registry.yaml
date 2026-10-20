@@ -55,7 +55,7 @@ tools:
   amend_check:
     version: 0.1.0
     enabled: true
-    description_sha256: bafe9e3d2355308a02c325f1077f94af3ee3b0aec0678c4e918a919980a1060f
+    description_sha256: a60a5a4d1875688d09901a0051d87ea199974884e28414323acd52841454679a
   record_usage:
     version: 0.1.0
     enabled: true

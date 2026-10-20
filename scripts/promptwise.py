@@ -117,6 +117,26 @@ def usage_report_cmd(days: int = typer.Option(7, help="Window in days (1-365)"))
         typer.echo(f"  agent {name}: {bucket.events} events, ${bucket.cost_usd}")
 
 
+@app.command("ingest")
+def ingest(
+    root: Path = typer.Argument(Path("."), help="Project to refresh"),
+    session_file: list[Path] = typer.Option([], "--session-file", help="Text file to record as session facts (repeat)"),
+    session_id: str = typer.Option(None, help="Session the facts belong to"),
+) -> None:
+    """One ingestion sweep: refresh the code index and record session text as facts. Run it from a
+    scheduler (cron, systemd timer, Task Scheduler); see docs/MAINTENANCE.md. Exit 1 if any step failed."""
+    from core.ingestion import sweep
+
+    texts = [f.read_text(encoding="utf-8") for f in session_file]
+    result = sweep.run_ingestion_sweep(root.resolve(), session_texts=texts or None, session_id=session_id)
+    typer.echo(f"{result.root}: code index {'refreshed' if result.code_index_refreshed else 'NOT refreshed'}, "
+               f"facts recorded {result.facts_recorded}, failed {result.facts_failed}")
+    for error in result.errors:
+        typer.echo(f"  error: {error}")
+    if result.errors:
+        raise typer.Exit(code=1)
+
+
 spec_app = typer.Typer(help="Spec-driven workflow: specify -> plan -> tasks -> complete -> verify")
 app.add_typer(spec_app, name="spec")
 
@@ -265,12 +285,36 @@ def spec_amend(
 
     def action():
         before = {t.task_id: t.status for t in engine.spec_status(spec_id).tasks}
-        engine.amend_check(spec_id, requirement_id, AcceptanceCheck(requirement_id=requirement_id, command=command, files=list(file), expect_baseline=expect_baseline), reason=reason)  # type: ignore[arg-type]
+        engine.amend_check(spec_id, requirement_id, AcceptanceCheck(requirement_id=requirement_id, command=command, files=list(file), expect_baseline=expect_baseline), reason=reason, require_grant=False)  # type: ignore[arg-type]
         after = {t.task_id: t.status for t in engine.spec_status(spec_id).tasks}
         return [tid for tid, was in before.items() if was == "done" and after.get(tid) == "pending"]
 
     reopened = _spec_run(action)
     typer.echo(f"amended {requirement_id} of {spec_id}; reopened: {', '.join(reopened) or 'none'}")
+
+
+@spec_app.command("allow-amend")
+def spec_allow_amend(
+    spec_id: str,
+    ttl: int = typer.Option(900, min=30, max=86400, help="Seconds the grant stays valid"),
+) -> None:
+    """Let an agent replace ONE frozen check of this spec (amend_check over MCP), within --ttl seconds."""
+    from core.audit.log import record_audit
+    from core.policy.jit import grant_jit_permission
+    from core.spec import engine
+    from gateway.mcp_guard import operator_config, pinned_config
+
+    def action():
+        # The gateway's view of state (operator config, governance paths pinned), so the grant lands
+        # where the MCP amend_check looks for it, even when the operator file moves it out of the project.
+        config = pinned_config(operator_config())
+        engine.spec_status(spec_id, config=config)  # unknown spec -> error, no grant
+        grant = grant_jit_permission(config, engine.amend_grant_scope(spec_id), ttl)
+        record_audit(config, actor="cli", action="jit_grant", target=grant.scope, result="allow", detail={"expires_at": grant.expires_at})
+        return grant
+
+    grant = _spec_run(action)
+    typer.echo(f"one amend of {spec_id} allowed until {grant.expires_at}")
 
 
 mcp_cli = typer.Typer(help="Inspect the MCP tool surface")

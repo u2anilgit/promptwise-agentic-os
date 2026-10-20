@@ -71,3 +71,13 @@ def check_jit_grant(config: dict[str, Any], scope: str) -> bool:
     if grant is None:
         return False
     return datetime.fromisoformat(grant.expires_at) > _now()
+
+
+def revoke_jit_grant(config: dict[str, Any], scope: str) -> bool:
+    """Remove a grant (e.g. a one-shot grant once used). True only if an unexpired grant was present."""
+    grants = _load_grants(config)
+    grant = grants.pop(scope, None)
+    if grant is None:
+        return False
+    _save_grants(config, grants)
+    return datetime.fromisoformat(grant.expires_at) > _now()
