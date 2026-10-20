@@ -7,6 +7,7 @@ long-lived pack registry in memory across calls).
 """
 from __future__ import annotations
 
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -63,13 +64,17 @@ def list_installed_packs(
     # installed_dir entirely. Treat it the same as "not a pack", not as an
     # error (matches the never-crash doctor convention this module follows
     # elsewhere).
-    for pack_dir in sorted(p for p in installed_dir.iterdir() if p.is_dir() and not p.is_symlink()):
+    for pack_dir in sorted(p for p in installed_dir.iterdir() if p.is_dir() and not _is_link(p)):
         try:
             manifest = load_pack_manifest(pack_dir)
             results.append((pack_dir, manifest, None))
         except (PackValidationError, yaml.YAMLError) as exc:
             results.append((pack_dir, None, str(exc)))
     return results
+
+
+def _is_link(path: Path) -> bool:
+    return path.is_symlink() or path.is_junction()
 
 
 def install_pack(name: str, config: dict | None = None, root: Path | None = None) -> PackManifest:
@@ -135,6 +140,9 @@ def remove_pack(name: str, config: dict | None = None, root: Path | None = None)
     dependents = [m.name for _, m, _ in list_installed_packs(config=config, root=root) if m is not None and m.name != name and name in m.dependency_names()]
     if dependents:
         raise PackInstallError(f"cannot remove {name}: {', '.join(sorted(dependents))} depends on it (remove those first)")
+    if dest_dir.is_junction():  # Windows junction: same reasoning as a symlink below
+        os.rmdir(dest_dir)  # removes the junction itself, never its target
+        return True
     if dest_dir.is_symlink():
         # shutil.rmtree refuses to operate on a symlink (raises OSError) —
         # and even if it didn't, recursing through it would delete

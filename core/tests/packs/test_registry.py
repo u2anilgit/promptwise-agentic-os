@@ -289,3 +289,19 @@ def test_removing_a_pack_another_pack_depends_on_is_refused(tmp_path):
         remove_pack("required-pack", config=_config(), root=tmp_path)
     remove_pack("sample-pack", config=_config(), root=tmp_path)
     remove_pack("required-pack", config=_config(), root=tmp_path)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="directory junctions are Windows-only")
+def test_a_junction_in_installed_is_not_a_pack_and_removal_unlinks_only_the_junction(tmp_path):
+    import subprocess
+
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "precious.txt").write_text("keep", encoding="utf-8")
+    installed = tmp_path / "packs" / "installed"
+    installed.mkdir(parents=True)
+    link = installed / "evil-pack"
+    assert subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)], capture_output=True).returncode == 0
+    assert [p.name for p, _, _ in list_installed_packs(config=_config(), root=tmp_path)] == []
+    assert remove_pack("evil-pack", config=_config(), root=tmp_path) is True
+    assert not link.exists() and (target / "precious.txt").exists()
