@@ -38,3 +38,28 @@ def test_enforced_policy_denies_an_unlisted_test_command(tmp_path):
     assert not result.passed and not result.grounded
     (record,) = _shell_records(tmp_path)
     assert record["result"] == "deny"
+
+
+def test_a_mutation_run_that_policy_denies_blocks_the_gate(tmp_path):
+    """Tests allowed, mutation not: the gate must not pass as if mutation were unconfigured."""
+    from core.actions.shell import command_action
+
+    config = _config(tmp_path, enforce=True)
+    allow = command_action(PASSING, tmp_path).removeprefix("shell:run:")
+    (tmp_path / "policies" / "p.yaml").write_text(f"rules:\n  - action: 'shell:run:{allow}'\n    effect: allow\n", encoding="utf-8")
+    config["verify"]["mutation_command"] = "mutmut run"
+    result = verify_output("diff", cwd=tmp_path, config=config)
+    assert result.grounded and not result.passed
+    assert "mutation" in (result.blocked_reason or "")
+    assert result.mutation_passed is False
+
+
+def test_an_unauditable_test_run_blocks_the_gate(tmp_path, monkeypatch):
+    from core.actions import shell
+
+    def broken(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(shell, "record_audit", broken)
+    result = verify_output("diff", cwd=tmp_path, config=_config(tmp_path))
+    assert not result.passed and not result.grounded

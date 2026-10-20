@@ -89,3 +89,18 @@ def test_command_action_for_bare_programs(tmp_path, command, expected):
 
 def test_command_action_for_a_path_is_its_resolved_location(tmp_path):
     assert command_action("bin/python.exe x", tmp_path) == "shell:run:" + (tmp_path / "bin" / "python.exe").resolve().as_posix()
+
+
+def test_denial_still_returns_a_result_when_the_audit_log_is_unwritable(tmp_path, monkeypatch):
+    def broken(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(shell, "record_audit", broken)
+    result = shell_exec("tests", f"{PY} -c pass", tmp_path, _config(tmp_path), actor="verify", enforce_policy=True)
+    assert result.ran is False and result.error_kind == "policy_denied"
+
+
+def test_a_failing_command_is_recorded_as_allowed_with_passed_false(tmp_path):
+    shell_exec("tests", f"{PY} -c \"raise SystemExit(1)\"", tmp_path, _config(tmp_path), actor="verify", enforce_policy=False)
+    end = _records(tmp_path)[-1]
+    assert end["result"] == "allow" and end["detail"]["passed"] is False

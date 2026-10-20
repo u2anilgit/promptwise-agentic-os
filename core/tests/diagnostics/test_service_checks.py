@@ -100,3 +100,22 @@ def test_governance_exposure_passes_when_relocated(tmp_path, monkeypatch):
     config["gateway"]["token_path"] = str(operator / "token")
     result = checks._check_governance_exposure(config)
     assert result.status == "PASS", result.message
+
+
+def test_governance_exposure_judges_the_operator_config_when_one_is_set(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    operator = tmp_path / "operator"
+    project.mkdir()
+    operator.mkdir()
+    monkeypatch.chdir(project)
+    op_file = operator / "operator.yaml"
+    op_file.write_text(
+        f"gateway:\n  allowed_roots: ['{project.as_posix()}']\n  token_path: '{(operator / 'token').as_posix()}'\n"
+        f"audit:\n  log_path: '{(operator / 'a.jsonl').as_posix()}'\n"
+        f"paths:\n  policies_dir: '{(operator / 'policies').as_posix()}'\n  model_catalog: '{(operator / 'c.yaml').as_posix()}'\n"
+        f"policy:\n  tool_registry_path: '{(operator / 'r.yaml').as_posix()}'\n  jit_grants_path: '{(operator / 'g.json').as_posix()}'\n"
+        f"database:\n  path: '{(operator / 'db.sqlite3').as_posix()}'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PROMPTWISE_OPERATOR_CONFIG", str(op_file))
+    assert checks._check_governance_exposure({}).status == "PASS"  # the project-layer config passed in is ignored

@@ -200,8 +200,21 @@ _TREE_IGNORED = {".git", ".venv", "venv", "node_modules", "__pycache__", ".pytes
 _TREE_MAX_FILES = 50_000
 
 
-def _tree_state(base: Path) -> dict[str, tuple[int, int]] | None:
-    """(size, mtime_ns) of every project file outside well-known cache/VCS dirs; None if the tree is too big to watch."""
+def _core_written_files(config: dict[str, Any], base: Path) -> set[str]:
+    """Files core itself writes while a baseline runs (the audit log: shell_exec records every run). They
+    change because of the engine, not the check, so the tree-watch must not count them."""
+    from core.audit.log import _log_path
+
+    out = set()
+    try:
+        out.add(_log_path(config).resolve().relative_to(base.resolve()).as_posix())
+    except ValueError:
+        pass  # outside the project tree: never watched anyway
+    return out
+
+
+def _tree_state(base: Path, exclude: set[str] = frozenset()) -> dict[str, tuple[int, int]] | None:
+    """(size, mtime_ns) of every project file outside well-known cache/VCS dirs and `exclude`; None if the tree is too big to watch."""
     state: dict[str, tuple[int, int]] = {}
     for dirpath, dirnames, filenames in os.walk(base):
         dirnames[:] = [d for d in dirnames if d not in _TREE_IGNORED]
@@ -211,7 +224,10 @@ def _tree_state(base: Path) -> dict[str, tuple[int, int]] | None:
                 stat = path.stat()
             except OSError:
                 continue
-            state[path.relative_to(base).as_posix()] = (stat.st_size, stat.st_mtime_ns)
+            key = path.relative_to(base).as_posix()
+            if key in exclude:
+                continue
+            state[key] = (stat.st_size, stat.st_mtime_ns)
             if len(state) > _TREE_MAX_FILES:
                 return None
     return state
@@ -242,14 +258,19 @@ def _observe_baseline(check: FrozenCheck, base: Path, config: dict[str, Any], sp
                              enforce_policy=bool(_spec_setting(config, "enforce_command_policy", True)), timeout=timeout)
         if outcome.error_kind == "timeout":
             _refuse_baseline(config, spec_id, rid, f"baseline run of the check for requirement '{rid}' timed out after {timeout}s; a check must finish on its own and may not wait for something the work will provide later")
+        if outcome.error_kind == "policy_denied":
+            _refuse_baseline(config, spec_id, rid, f"baseline run of the check for requirement '{rid}' was denied by policy ({_command_action(check.command, base)})")
+        if outcome.error_kind == "audit_unavailable":
+            _refuse_baseline(config, spec_id, rid, f"baseline run of the check for requirement '{rid}' did not start: the audit log could not be written")
         if outcome.error_kind:
             _refuse_baseline(config, spec_id, rid, f"baseline run of the check for requirement '{rid}' could not be executed ({outcome.error_kind}): fix the command; a missing program is not a failing test")
         return "passed" if outcome.passed else "failed"
 
     if check.expect_baseline == "fail":
-        before = _tree_state(base)
+        own = _core_written_files(config, base)
+        before = _tree_state(base, own)
         first, second = run_once(), run_once()
-        after = _tree_state(base)
+        after = _tree_state(base, own)
         if before is not None and after is not None and before != after:
             touched = sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k))[:3]
             _refuse_baseline(config, spec_id, rid, f"acceptance check for requirement '{rid}' wrote to the project tree during its baseline run ({', '.join(touched)}); a check must be read-only")

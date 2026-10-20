@@ -20,6 +20,9 @@ from core.verify.models import ToolRunResult
 from core.verify.runners import run_command
 
 MAX_AUDITED_COMMAND_CHARS = 500
+# error_kind values meaning governance stopped the command (it did not run). Callers must treat them as a
+# blocking failure, never as "not configured".
+GOVERNANCE_ERRORS = frozenset({"policy_denied", "audit_unavailable"})
 
 
 def command_action(command: str, base: Path) -> str:
@@ -56,7 +59,10 @@ def shell_exec(
     if enforce_policy:
         decision = check_policy(action, config)
         if not decision.allowed:
-            record_audit(config, actor=actor, action="shell_exec", target=action, result="deny", detail={**detail, "reason": decision.reason})
+            try:
+                record_audit(config, actor=actor, action="shell_exec", target=action, result="deny", detail={**detail, "reason": decision.reason})
+            except Exception:  # noqa: BLE001 - the denial stands either way; report it, do not crash the caller
+                pass
             return ToolRunResult(tool=tool_name, ran=False, passed=False, output=f"{tool_name}: denied by policy ({action})", error_kind="policy_denied")
 
     try:
@@ -67,7 +73,7 @@ def shell_exec(
     started = time.monotonic()
     result = run_command(tool_name, command, cwd, timeout=timeout, max_output_chars=max_output_chars)
     try:
-        record_audit(config, actor=actor, action="shell_exec", target=action, result="allow" if result.passed else "error", detail={
+        record_audit(config, actor=actor, action="shell_exec", target=action, result="allow", detail={  # a failing test is an allowed run, not an error
             **detail, "phase": "end", "passed": result.passed, "error_kind": result.error_kind,
             "duration_ms": int((time.monotonic() - started) * 1000),
             "output_sha256": hashlib.sha256(result.output.encode("utf-8")).hexdigest(),

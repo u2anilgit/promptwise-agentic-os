@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-from core.config.resolve import resolve_config_auto, resolve_path
+from core.config.resolve import resolve_config, resolve_config_auto, resolve_path
 from core.diagnostics.hardware import detect_hardware
 from core.diagnostics.models import CheckResult
 
@@ -196,7 +197,11 @@ def _check_governance_exposure(config: dict) -> CheckResult:
     """WARN when governance files resolve inside a root agents may write (gateway.allowed_roots, default
     the cwd). Fine for a single-developer setup protected by git review; a hardened deployment relocates
     them via the operator config (gateway/CLAUDE.md, Operator config)."""
-    roots = [Path(r).expanduser().resolve() for r in (config.get("gateway", {}).get("allowed_roots") or [])] or [Path.cwd().resolve()]
+    operator_file = os.environ.get("PROMPTWISE_OPERATOR_CONFIG")
+    if operator_file:  # judge what the gateway actually uses, not the agent-writable project layers
+        config = resolve_config(org_path=Path(operator_file), project_path=None, local_path=None, env=os.environ)
+    # Same resolution as gateway/mcp_guard.py allowed_roots().
+    roots = [Path(r).resolve() for r in (config.get("gateway", {}).get("allowed_roots") or [])] or [Path.cwd().resolve()]
     exposed = []
     for label, key, default in _GOVERNANCE_FILES:
         node = config

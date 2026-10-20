@@ -20,6 +20,7 @@ from core.config.resolve import resolve_config_auto
 from core.verify.ledger import record_failure, record_success
 from core.verify.models import VerifyResult
 from core.verify.runners import run_lint, run_mutation, run_tests
+from core.actions.shell import GOVERNANCE_ERRORS
 from core.verify.security import run_gitleaks, run_semgrep
 
 
@@ -72,6 +73,10 @@ def verify_output(
         blocking_failures.append("gitleaks detected a secret")
     if mutation_result is not None and mutation_result.ran and not mutation_result.passed:
         blocking_failures.append("mutation testing failed (tests did not catch the injected faults)")
+    # A configured command that governance stopped (policy denial, unwritable audit log) did not run: that
+    # must block, or a denied mutation/lint run would look exactly like an unconfigured one.
+    for stopped in (r for r in (test_result, lint_result, mutation_result) if r is not None and r.error_kind in GOVERNANCE_ERRORS):
+        blocking_failures.append(f"{stopped.tool} did not run: {stopped.error_kind.replace('_', ' ')}")
 
     passed = len(blocking_failures) == 0
     blocked_reason = "; ".join(blocking_failures) if blocking_failures else None

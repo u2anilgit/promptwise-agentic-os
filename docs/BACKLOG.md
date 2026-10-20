@@ -119,7 +119,7 @@ deferred:
   sibling fact. Conservative (over-flags, never under-flags), not a leak, but degrades
   `allow_pii=False` recall over time. Fix (later): flag per extracted fact instead, or document
   the whole-input choice as intentional.
-- [x] **(FIXED 2026-10-20: root-less calls without a config use `$PROMPTWISE_HOME` (default the home dir), so the store is `~/.promptwise/memory.sqlite3`; with an explicit config the caller decides, as the gateway does)** **Session-scope config resolution falls back to process cwd** — `record_memory`/
+- [x] **(FIXED 2026-10-20: root-less calls without a config use `$PROMPTWISE_HOME` (default the home dir), so the store is `~/.promptwise/memory.sqlite3`; with an explicit config the caller decides, as the gateway does; session facts recorded earlier by such calls stay in the old `./.promptwise/memory.sqlite3` of whatever cwd was used; the audit record of a root-less call still resolves against cwd)** **Session-scope config resolution falls back to process cwd** — `record_memory`/
   `query_memory` call `resolve_config_auto(root=Path(root) if root else None)`; for legitimate
   session-scope calls `root` is `None`, so config/db-path resolution falls back to process cwd —
   the same bug *class* Phase 2 already fixed once (MCP caller cwd ≠ target project cwd). Only
@@ -337,7 +337,7 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 ### From independent-verification build, 2026-10-17
 
 - [ ] **(reviewer DONE 2026-10-20: `scripts/examples/reviewer_ollama.py`; a mutation wrapper is stack-specific (mutmut, Stryker, ...) so it belongs in a Phase 8 stack pack, not core)** Ship a reference reviewer wrapper (a script that calls a chosen second model) and a reference mutation-tool wrapper as documented examples under `docs/` or a pack; core deliberately bundles neither.
-- [ ] `expect_baseline='pass'` guards are an author-chosen escape hatch: consider requiring operator approval (or a distinct audit flag in the dashboard) for guards on specs that touch new behaviour.
+- [ ] **(2026-10-20 status: the dashboard already flags each guard with a warning badge, and `spec.allow_regression_guards: false` forbids them; per-guard operator approval is still not built)** `expect_baseline='pass'` guards are an author-chosen escape hatch: consider requiring operator approval (or a distinct audit flag in the dashboard) for guards on specs that touch new behaviour.
 - [x] FIXED (adversarial review): baselines run twice and must agree, reject tree-writing checks, distinguish missing program/timeout from a real failure, forbid-able guards, reviewer cwd/payload hardening, bounded reviewer output.
 - [ ] Residual: a red check can still keep arming state outside the project tree; the tree-watch skips trees over 50k files (silently weaker) and ignores cache dirs; consider running baselines in a throwaway copy of the tree.
 - [ ] Reviewer verdicts are not signed or bound to the verdict's own evidence hash (the payload carries `evidence_sha256`, but the reviewer need not echo it); no tree digest is sent. Mutation and reviewer commands are not routed through `check_policy` (operator-defined) and the reviewer inherits the gateway's full environment by design (it may need model API keys).
