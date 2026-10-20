@@ -23,10 +23,18 @@ SEED = [  # tier, tokens in, tokens out, agent, task reference
 ]
 
 
+MARKER = ".promptwise-e2e-state"
+
+
 def prepare(state: Path) -> Path:
     if state.exists():
+        # Only ever delete a directory this script created (or an empty one): --state / E2E_STATE could
+        # be pointed at a real project by mistake.
+        if not (state / MARKER).is_file() and any(state.iterdir()):
+            raise SystemExit(f"refusing to reuse {state}: not an e2e state directory (no {MARKER}) and not empty")
         shutil.rmtree(state)
     (state / ".promptwise").mkdir(parents=True)
+    (state / MARKER).write_text("throwaway state for scripts/e2e_gateway.py\n", encoding="utf-8")
     credential = state / ".promptwise" / "dashboard_token"
     credential.write_text(secrets.token_urlsafe(32), encoding="utf-8")
     return credential
@@ -40,8 +48,9 @@ def main() -> None:
     state = args.state.resolve()
     credential = prepare(state)
     os.chdir(state)
+    for name in [n for n in os.environ if n.upper().startswith("PROMPTWISE_")]:
+        del os.environ[name]  # an exported override must not point the throwaway gateway at real state
     os.environ["PROMPTWISE_GATEWAY__TOKEN_PATH"] = str(credential)
-    os.environ.pop("PROMPTWISE_OPERATOR_CONFIG", None)
 
     import uvicorn
 

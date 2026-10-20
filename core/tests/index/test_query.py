@@ -206,3 +206,20 @@ def test_relative_and_absolute_root_share_the_incremental_index(tmp_path, monkey
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(query_module, "parse_file", lambda path: pytest.fail(f"reparsed {path}"))
     assert len(query_code_index("thing", root=Path("repo"), config=config)) == 1
+
+
+def test_legacy_relative_keys_are_swept(tmp_path):
+    from core.index.models import CodeLocation
+    from core.index.store import indexed_files, open_store, replace_file_rows
+
+    config = {"index": {"db_path": str(tmp_path / "idx.sqlite3")}}
+    conn = open_store(config, root=tmp_path)
+    replace_file_rows(conn, "repo/old.py", 1.0, [CodeLocation(file="repo/old.py", line=1, symbol="old", kind="function")])
+    conn.close()
+    _write(tmp_path / "repo" / "m.py", "def thing():\n    pass\n")
+    query_code_index("thing", root=tmp_path / "repo", config=config)
+    conn = open_store(config, root=tmp_path)
+    try:
+        assert "repo/old.py" not in indexed_files(conn)
+    finally:
+        conn.close()

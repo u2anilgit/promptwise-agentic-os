@@ -188,16 +188,23 @@ def _prefix_matches(f, state: _Verified) -> bool:
     return digest.digest() == state.digest.digest()
 
 
+def _read_chunk(f) -> bytes:
+    return f.read(_READ_CHUNK)
+
+
 def _verify_from(f, state: _Verified) -> int | None:
     """Verify complete lines from the current position (state.offset), advancing state in place.
     Returns the zero-based line index of the first break, or None."""
-    pending = b""
+    pending: list[bytes] = []  # pieces of a line still waiting for its newline (each chunk is split once)
     while True:
-        chunk = f.read(_READ_CHUNK)
+        chunk = _read_chunk(f)
         if not chunk:
             return None
-        pending += chunk
-        *complete, pending = pending.split(b"\n")
+        *complete, rest = chunk.split(b"\n")
+        if complete:
+            complete[0] = b"".join(pending) + complete[0]
+            pending = []
+        pending.append(rest)
         for raw in complete:
             line = raw + b"\n"
             if raw.strip():

@@ -81,7 +81,8 @@ def query_code_index(
             replace_file_rows(conn, file_key, current_mtime, locations)
 
         # One database may serve several roots: only this root's rows are swept or returned.
-        for stale_file in {f for f in indexed_files(conn) if _under(f, root)} - seen_files:
+        # Keys are absolute (root is resolved); a relative key is a leftover from before that and is dropped.
+        for stale_file in {f for f in indexed_files(conn) if _under(f, root) or not Path(f).is_absolute()} - seen_files:
             delete_file_rows(conn, stale_file)
 
         return [loc for loc in query_symbol(conn, symbol, kind) if _under(loc.file, root)]

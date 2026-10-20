@@ -117,3 +117,27 @@ def test_partial_trailing_line_is_left_for_the_next_call(tmp_path):
 
 def test_missing_log_is_clean(tmp_path):
     assert chain_status(_config(tmp_path)).ok
+
+
+def test_a_huge_line_without_newline_is_not_rescanned_quadratically(tmp_path, monkeypatch):
+    from core.audit import log
+
+    config = _config(tmp_path)
+    record_audit(config, actor="t", action="a", target="0", result="allow")
+    path = tmp_path / "audit.jsonl"
+    with path.open("ab") as f:
+        f.write(b"x" * (64 * 1024))  # a writer mid-append, or garbage, with no newline yet
+    monkeypatch.setattr(log, "_READ_CHUNK", 1024)
+    splits = {"bytes": 0}
+    real_split = bytes.split
+
+    class Counting(bytes):
+        def split(self, *args, **kwargs):
+            splits["bytes"] += len(self)
+            return real_split(self, *args, **kwargs)
+
+    real_read = log._read_chunk if hasattr(log, "_read_chunk") else None
+    assert real_read is not None, "chunk reads go through _read_chunk"
+    monkeypatch.setattr(log, "_read_chunk", lambda f: Counting(real_read(f)))
+    assert chain_status(config).ok
+    assert splits["bytes"] < 4 * path.stat().st_size  # linear, not ~n^2/chunk
