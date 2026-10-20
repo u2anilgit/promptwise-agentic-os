@@ -92,7 +92,21 @@ class DashboardFiles(StaticFiles):
 
 
 def create_app(dashboard_dir: Path | str | None = None) -> FastAPI:
-    application = FastAPI(title="PromptWise Agentic OS Gateway", version="0.1.0", lifespan=lifespan)
+    # No public schema or interactive docs: the schema is served behind the credential below, and the
+    # Swagger/ReDoc pages would need third-party scripts the dashboard CSP does not allow anyway.
+    application = FastAPI(
+        title="PromptWise Agentic OS Gateway",
+        version="0.1.0",
+        lifespan=lifespan,
+        openapi_url=None,
+        docs_url=None,
+        redoc_url=None,
+    )
+
+    @application.get("/openapi.json", dependencies=SECURED, include_in_schema=False)
+    def openapi_schema() -> dict:
+        return application.openapi()
+
     application.include_router(api_v1)
     application.include_router(routes)
     if dashboard_dir is None:

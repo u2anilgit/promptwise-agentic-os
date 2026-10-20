@@ -130,3 +130,16 @@ def test_verify_endpoint_reports_success_for_a_passing_test_command(tmp_path, mo
     body = response.json()
     assert body["passed"] is True
     assert body["blocked_reason"] is None
+
+
+def test_schema_requires_the_credential_and_interactive_docs_are_off():
+    anonymous = TestClient(app)
+    assert anonymous.get("/openapi.json").status_code == 401
+    for path in ("/docs", "/redoc", "/docs/oauth2-redirect"):
+        response = anonymous.get(path)
+        assert response.status_code in (401, 404)
+        assert "swagger" not in response.text.lower() and "redoc" not in response.text.lower()
+    schema = client.get("/openapi.json")
+    assert schema.status_code == 200
+    assert schema.json() == app.openapi()
+    assert "/openapi.json" not in schema.json()["paths"]
