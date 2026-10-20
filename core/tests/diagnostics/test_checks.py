@@ -16,6 +16,7 @@ def test_run_diagnostics_returns_all_check_names():
         "services.gateway",
         "deps.integrity",
         "db.schema",
+        "governance.exposure",
     }
 
 
@@ -38,11 +39,11 @@ def test_packs_integrity_passes_with_zero_packs():
     assert "0 packs" in packs_check.message
 
 
-def test_unimplemented_checks_warn_not_fail():
+def test_service_checks_never_fail_the_doctor():
     results = run_diagnostics()
-    for name in ("services.ollama", "services.qdrant"):
+    for name in ("services.ollama", "services.qdrant", "governance.exposure"):
         check = next(r for r in results if r.name == name)
-        assert check.status == "WARN"
+        assert check.status in ("PASS", "WARN")
 
 
 def test_policy_load_check_passes_with_default_policy():

@@ -18,13 +18,15 @@ CLI + core verb `run_diagnostics()`. Runs a fixed set of core checks, then disco
 | Check | What it verifies | Failure hint example |
 |---|---|---|
 | `services.gateway` | FastAPI gateway responds on configured port | "gateway not listening on :8000 — is `docker compose up` running?" |
-| `services.ollama` | Ollama reachable, at least one model pulled | "no models pulled — run `ollama pull qwen2.5-coder:7b`" |
-| `services.qdrant` | Qdrant reachable, collections initialized | "Qdrant up but collections missing — run `promptwise memory init`" |
+| `services.ollama` | Ollama reachable at `memory.ollama_base_url` and the embedding model pulled (WARN otherwise, never FAIL: offline is valid) | "embedding model 'nomic-embed-text' is missing - run `ollama pull nomic-embed-text`" |
+| `services.qdrant` | Qdrant `/readyz` at `memory.qdrant_url` (WARN when down: recall falls back to full-text search) | "Qdrant not reachable at http://127.0.0.1:6333" |
 | `hardware.ram` | available RAM vs smallest configured model tier | "8GB free, local-code tier needs 14GB — falling back to local-small" |
 | `config.resolve` | config layers (§4 of ARCHITECTURE.md) parse and merge without conflict | shows the exact file + key that conflicts |
 | `policy.load` | all policy-as-code files in `policies/` + installed packs parse | shows the file + line that fails to parse |
 | `packs.integrity` | every installed pack's `pack.yaml` validates, `requires_core` range satisfied | names the pack and the failing constraint |
 | `audit.chain` | hash chain of the audit log is unbroken | flags the first broken link, does not auto-repair |
+| `db.schema` | database revision vs code head | "database at 0003, code expects 0004 — run `promptwise db upgrade`" |
+| `governance.exposure` | audit log, policies, tool registry, JIT grants, database, catalog and API credential resolve outside `gateway.allowed_roots` (WARN otherwise) | "inside an agent-writable root: audit log, policies — relocate via PROMPTWISE_OPERATOR_CONFIG" |
 | `deps.integrity` | no installed package is on `security/known_bad_packages.yaml` (FAIL); `requirements.lock` exists, is hash-pinned and matches installed versions (WARN) | "litellm==1.82.8 (malicious release) — uninstall and rotate credentials"; "no lockfile — generate with `uv pip compile --generate-hashes`" |
 
 Exit code is non-zero if any check is FAIL, so `promptwise doctor` is CI-safe (`compose/` bundle runs it as a healthcheck).

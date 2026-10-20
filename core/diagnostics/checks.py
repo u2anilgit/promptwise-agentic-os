@@ -2,6 +2,7 @@
 """promptwise doctor — core health checks. docs/MAINTENANCE.md §2."""
 from __future__ import annotations
 
+import json
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -76,10 +77,6 @@ def _check_packs_integrity(config: dict | None = None) -> CheckResult:
     return CheckResult(name="packs.integrity", status="PASS", message=f"{count} {noun} installed, all valid")
 
 
-def _not_yet_implemented(name: str, phase: str) -> CheckResult:
-    return CheckResult(name=name, status="WARN", message=f"not yet implemented — lands in {phase}")
-
-
 def _check_services_gateway(config: dict | None = None) -> CheckResult:
     config = config if config is not None else resolve_config_auto()
     port = config.get("gateway", {}).get("port", 8000)
@@ -149,17 +146,87 @@ def _check_deps_integrity(config: dict) -> CheckResult:
     return check_dependencies(config)
 
 
+def _http_get(base: str, path: str) -> bytes | None:
+    """GET a local service endpoint; None when unreachable. Only http(s) URLs are probed."""
+    if not isinstance(base, str) or not base.startswith(("http://", "https://")):
+        return None
+    try:
+        with urllib.request.urlopen(base.rstrip("/") + path, timeout=1) as response:  # noqa: S310 - scheme checked above
+            return response.read(1_000_000) if response.status == 200 else None
+    except Exception:  # noqa: BLE001 - doctor must never crash; unreachable is a valid state
+        return None
+
+
+def _check_services_ollama(config: dict) -> CheckResult:
+    memory = config.get("memory", {})
+    base = memory.get("ollama_base_url", "http://127.0.0.1:11434")
+    body = _http_get(base, "/api/tags")
+    if body is None:
+        return CheckResult(name="services.ollama", status="WARN", message=f"Ollama not reachable at {base} - local models and memory embeddings are unavailable until it runs")
+    try:
+        names = [m["name"] for m in json.loads(body)["models"]]
+    except (ValueError, KeyError, TypeError):
+        return CheckResult(name="services.ollama", status="WARN", message=f"{base}/api/tags did not return an Ollama model list")
+    embedding = memory.get("embedding_model", "nomic-embed-text")
+    if not any(n == embedding or n.split(":")[0] == embedding for n in names):
+        return CheckResult(name="services.ollama", status="WARN", message=f"Ollama reachable ({len(names)} model(s)) but embedding model '{embedding}' is missing - run `ollama pull {embedding}`")
+    return CheckResult(name="services.ollama", status="PASS", message=f"Ollama reachable at {base}, {len(names)} model(s) available")
+
+
+def _check_services_qdrant(config: dict) -> CheckResult:
+    base = config.get("memory", {}).get("qdrant_url", "http://127.0.0.1:6333")
+    if _http_get(base, "/readyz") is None:
+        return CheckResult(name="services.qdrant", status="WARN", message=f"Qdrant not reachable at {base} - memory recall falls back to full-text search")
+    return CheckResult(name="services.qdrant", status="PASS", message=f"Qdrant ready at {base}")
+
+
+# Operator-owned governance files: (label, dotted config key, default path).
+_GOVERNANCE_FILES = (
+    ("audit log", "audit.log_path", ".promptwise/agentic_audit.jsonl"),
+    ("policies", "paths.policies_dir", "policies"),
+    ("tool registry", "policy.tool_registry_path", "tool_registry.yaml"),
+    ("JIT grants", "policy.jit_grants_path", ".promptwise/jit_grants.json"),
+    ("database", "database.path", ".promptwise/agentic.sqlite3"),
+    ("model catalog", "paths.model_catalog", "catalog/model_catalog.yaml"),
+    ("API credential", "gateway.token_path", "~/.promptwise/dashboard_token"),
+)
+
+
+def _check_governance_exposure(config: dict) -> CheckResult:
+    """WARN when governance files resolve inside a root agents may write (gateway.allowed_roots, default
+    the cwd). Fine for a single-developer setup protected by git review; a hardened deployment relocates
+    them via the operator config (gateway/CLAUDE.md, Operator config)."""
+    roots = [Path(r).expanduser().resolve() for r in (config.get("gateway", {}).get("allowed_roots") or [])] or [Path.cwd().resolve()]
+    exposed = []
+    for label, key, default in _GOVERNANCE_FILES:
+        node = config
+        for part in key.split("."):
+            node = node.get(part) if isinstance(node, dict) else None
+        raw = node if isinstance(node, str) and node else default
+        path = Path(raw).expanduser()
+        path = (path if path.is_absolute() else Path.cwd() / path).resolve()
+        if any(path == r or r in path.parents for r in roots):
+            exposed.append(label)
+    if exposed:
+        return CheckResult(
+            name="governance.exposure", status="WARN",
+            message=f"inside an agent-writable root: {', '.join(exposed)} - acceptable for a single-developer setup under git review; relocate via PROMPTWISE_OPERATOR_CONFIG for a hardened deployment",
+        )
+    return CheckResult(name="governance.exposure", status="PASS", message="governance files are outside the agent-writable roots")
+
+
 def run_diagnostics(config: dict | None = None) -> list[CheckResult]:
     config = config if config is not None else resolve_config_auto()
     return [
         _check_hardware_ram(),
         _check_config_resolve(),
         _check_packs_integrity(config),
-        _not_yet_implemented("services.ollama", "Phase 1"),
-        _not_yet_implemented("services.qdrant", "Phase 4"),
+        _check_services_ollama(config),
+        _check_services_qdrant(config),
         _check_policy_load(config),
         _check_audit_chain(config),
         _check_services_gateway(config),
         _check_deps_integrity(config),
         _check_db_schema(config),
+        _check_governance_exposure(config),
     ]
