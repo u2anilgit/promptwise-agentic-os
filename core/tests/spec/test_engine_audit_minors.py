@@ -110,3 +110,11 @@ def test_converge_is_audited(project):
     entry = _entries(project, "converge")[-1]
     assert entry["detail"]["stale"] == report.stale
     assert entry["detail"]["reasons"] == report.reasons
+
+
+def test_acceptance_and_baseline_runs_are_governed_shell_actions(project):
+    spec_id = _tasked(project)
+    complete_task(spec_id, "t1", "did it", config=project[1], root=project[0])
+    runs = [r for r in audit_records(project[0]) if r["action"] == "shell_exec" and r["actor"] == "spec_engine"]
+    tools = {r["detail"]["tool"] for r in runs if r["detail"].get("phase") == "end"}
+    assert {"baseline:R1", "baseline:R2", "acceptance_check:R1"} <= tools

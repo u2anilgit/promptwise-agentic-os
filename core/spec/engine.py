@@ -26,6 +26,7 @@ from core.audit.log import record_audit
 from core.config.resolve import resolve_config_auto
 from core.db.base import session_scope
 from core.db.migrate import migrate_to_head
+from core.actions.shell import command_action as _command_action, shell_exec
 from core.policy.engine import check_policy
 from core.policy.jit import check_jit_grant, revoke_jit_grant
 from core.orchestrate.graph import topological_order
@@ -36,7 +37,6 @@ from core.spec.ears import validate_ears
 from core.verify.gate import verify_output
 from core.verify.models import VerifyResult
 from core.verify.reviewer import run_reviewer
-from core.verify.runners import run_command
 from core.spec.models import (
     AcceptanceCheck,
     Complexity,
@@ -238,7 +238,8 @@ def _observe_baseline(check: FrozenCheck, base: Path, config: dict[str, Any], sp
             _refuse_baseline(config, spec_id, rid, f"baseline run of the check for requirement '{rid}' was denied by policy ({action})")
 
     def run_once() -> str:
-        outcome = run_command(f"baseline:{rid}", check.command, base, timeout=timeout)
+        outcome = shell_exec(f"baseline:{rid}", check.command, base, config, actor="spec_engine",
+                             enforce_policy=bool(_spec_setting(config, "enforce_command_policy", True)), timeout=timeout)
         if outcome.error_kind == "timeout":
             _refuse_baseline(config, spec_id, rid, f"baseline run of the check for requirement '{rid}' timed out after {timeout}s; a check must finish on its own and may not wait for something the work will provide later")
         if outcome.error_kind:
@@ -369,22 +370,6 @@ def _unchanged(base: Path, check: FrozenCheck) -> list[str]:
     return changed
 
 
-def _command_action(command: str, base: Path) -> str:
-    """Policy action for a check command. A bare program name maps to
-    shell:run:<name>; anything containing a path separator maps to its
-    resolved absolute path, so a file merely *named* python cannot ride on
-    an allow rule for the real interpreter. Allowing an interpreter still
-    allows arbitrary code run through it."""
-    try:
-        argv0 = shlex.split(command)[0]
-    except (ValueError, IndexError):
-        return "shell:run:"
-    if "/" in argv0 or chr(92) in argv0:
-        return "shell:run:" + (base / argv0).resolve().as_posix()
-    name = Path(argv0).name
-    return f"shell:run:{name[:-4] if name.lower().endswith('.exe') else name}"
-
-
 def _reviewer_file(base: Path, relative: str) -> dict[str, str]:
     path = base / relative
     data = path.read_bytes() if path.is_file() else b""
@@ -449,7 +434,8 @@ def complete_task(
     timeout = int(_spec_setting(config, "check_timeout_seconds", 300))
     failed = []
     for c in task_checks:
-        outcome = run_command(f"acceptance_check:{c.requirement_id}", c.command, base, timeout=timeout)
+        outcome = shell_exec(f"acceptance_check:{c.requirement_id}", c.command, base, config, actor="spec_engine",
+                             enforce_policy=bool(_spec_setting(config, "enforce_command_policy", True)), timeout=timeout)
         if not (outcome.ran and outcome.passed):  # ran=False is a vacuous pass, never a pass
             failed.append(f"acceptance_check_failed:{c.requirement_id}")
     if failed:

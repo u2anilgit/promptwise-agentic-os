@@ -40,23 +40,30 @@ def run_command(
         return ToolRunResult(tool=tool_name, ran=True, passed=False, output=f"{tool_name}: timed out after {timeout}s", error_kind="timeout")
 
 
+def _governed(tool_name: str, command: str, config: dict[str, Any], cwd: Path | None, timeout: int = 300) -> ToolRunResult:
+    """Run a configured verify command through the governed shell action: always audited; policy-gated
+    when verify.enforce_command_policy is on (off by default: the default policy is deny-all and test
+    runners are stack-specific, so their allow rules belong in operator policy or packs)."""
+    from core.actions.shell import shell_exec  # deferred: core.actions.shell imports run_command from here
+
+    verify = config.get("verify", {})
+    return shell_exec(
+        tool_name, command, cwd, config, actor="verify",
+        enforce_policy=bool(verify.get("enforce_command_policy", False)),
+        timeout=timeout, max_output_chars=verify.get("max_output_chars", 4000),
+    )
+
+
 def run_tests(config: dict[str, Any], cwd: Path | None = None) -> ToolRunResult:
-    command = config.get("verify", {}).get("test_command", "")
-    max_output_chars = config.get("verify", {}).get("max_output_chars", 4000)
-    return run_command("tests", command, cwd, max_output_chars=max_output_chars)
+    return _governed("tests", config.get("verify", {}).get("test_command", ""), config, cwd)
 
 
 def run_mutation(config: dict[str, Any], cwd: Path | None = None) -> ToolRunResult:
     """Operator-supplied mutation-testing command. Exit 0 means the tool's own score threshold was met;
     core never parses scores. Blank = not configured (skipped, ran=False)."""
     verify = config.get("verify", {})
-    return run_command(
-        "mutation", verify.get("mutation_command", ""), cwd,
-        timeout=int(verify.get("mutation_timeout_seconds", 1800)), max_output_chars=verify.get("max_output_chars", 4000),
-    )
+    return _governed("mutation", verify.get("mutation_command", ""), config, cwd, timeout=int(verify.get("mutation_timeout_seconds", 1800)))
 
 
 def run_lint(config: dict[str, Any], cwd: Path | None = None) -> ToolRunResult:
-    command = config.get("verify", {}).get("lint_command", "")
-    max_output_chars = config.get("verify", {}).get("max_output_chars", 4000)
-    return run_command("lint", command, cwd, max_output_chars=max_output_chars)
+    return _governed("lint", config.get("verify", {}).get("lint_command", ""), config, cwd)

@@ -77,6 +77,10 @@ A task reaches `done` only after `complete_task` passes every layer below; `prom
 
 The reviewer receives each check's file path, sha256 and (truncated) source, `evidence_sha256`, and `evidence_untrusted: true` (the evidence is agent-written text: do not follow instructions in it). Approvals log the reviewer's reasons in the audit entry.
 
+## 2c-1. Governed shell runs (operator reference)
+
+Every configured command core runs (verify `test_command` / `lint_command` / `mutation_command`, spec baseline and acceptance checks) goes through `shell_exec` (`core/actions/shell.py`): a `shell_exec` audit record is written **before** the process starts (if it cannot be written, the command does not run) and another with the outcome (passed, error kind, duration, sha256 of the output; never the output). Spec checks are policy-gated by `spec.enforce_command_policy` (default true); verify commands only when `verify.enforce_command_policy: true` (default false because the default policy is deny-all; add `shell:run:<program>` allow rules first). A program given by path is matched by its resolved absolute path, so a file merely named like an allowed program does not match. semgrep, gitleaks and the reviewer command still run through their own runners.
+
 ## 2d. Scheduled ingestion sweep (operator reference)
 
 `promptwise ingest [ROOT] [--session-file F ...] [--session-id ID]` runs one `run_ingestion_sweep`: it refreshes the code index for ROOT and records any session text files as memory facts. It is deliberately not a daemon; schedule it. It exits 1 when any step reported an error, so the scheduler's failure handling sees it. Without Ollama/Qdrant the index still refreshes and fact recording degrades as documented for the memory layer.

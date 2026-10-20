@@ -13,7 +13,7 @@ core/
   config/          resolve.py (§4 config layering), defaults.yaml
   routing/         route_request, catalog loader, RAM watchdog        (Phase 1)
   policy/          check_policy, grant_jit_permission, undo buffer     (Phase 3)
-  actions/         fs_write: the governed action layer (policy-gated, audited, undo-buffered) (Phase 3)
+  actions/         governed action layer: fs_write (policy-gated, audited, undo-buffered), shell_exec (policy-gated, audited before and after) (Phase 3)
   audit/           record_audit, hash-chain, verification              (Phase 3)
   memory/          query_memory, rank_context, hybrid retrieval        (Phase 4)
   index/           query_code_index: tree-sitter definitions, SQLite symbol store (Phase 4)

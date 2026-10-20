@@ -62,5 +62,8 @@ verify:
   mutation_timeout_seconds: 1800
   reviewer_command: ""
   reviewer_timeout_seconds: 300
+  # test/lint/mutation commands always run through the audited shell_exec action; set true to also require a
+  # policy allow rule (shell:run:<program>) for them. Off by default: the default policy is deny-all.
+  enforce_command_policy: false
 usage:
   max_events_per_hour: 5000
