@@ -11,7 +11,7 @@ Each entry: what, why it matters, where it came from, status.
 Market/pattern research + repo status audit ahead of Phase 5 sub-project 2 (spec engine).
 Not yet brainstormed/planned — flagging here so it isn't lost.
 
-- [ ] **No SQLAlchemy/Alembic code exists anywhere in `core/`** despite being locked tech
+- [x] **(RESOLVED: `core/db/` SQLAlchemy 2 + Alembic since 2026-10-16)** **No SQLAlchemy/Alembic code exists anywhere in `core/`** despite being locked tech
   stack (root `CLAUDE.md:31`) — will block the spec engine's persistence layer if not
   planned before Phase 5 sub-project 2 starts.
 - [ ] **`orchestrate_tasks`'s `route_request` call sits outside its per-node `try`** (can
@@ -75,7 +75,7 @@ scope (deliberately out of this sub-project, per its Rulings 1-2):
   (design spec Ruling 2) until a policy model exists for "what may be auto-ingested" (per-source
   policy, rate limiting, consent). `run_ingestion_sweep`'s `session_texts` parameter is ready to
   receive whatever that future capture mechanism produces; no rework needed on this side.
-- [ ] **MCP tool exposure for `run_ingestion_sweep`**, mirroring the other two Phase 4
+- [x] **(RESOLVED 2026-10-16: exposed via `gateway/mcp_server.py`)** **MCP tool exposure for `run_ingestion_sweep`**, mirroring the other two Phase 4
   sub-projects' eventual MCP wrappers.
 
 ### From `memory-fact-layer` plan (merged `3f56319`, 2026-08-24)
@@ -185,7 +185,7 @@ deferred (see `docs/superpowers/plans/2026-08-24-code-index.md` and
   existing precedent is mixed (`fs.py` gates writes, `verify_output` doesn't gate its shell-outs).
   Decide explicitly before the follow-up task that exposes `query_code_index` over MCP — that's
   the point an untrusted agent, not core itself, picks `root`.
-- [ ] **Plan's own post-plan follow-ups** — MCP tool exposure for `query_code_index` (mirrors
+- [ ] **(MCP exposure done 2026-10-16; reference-finding still open)** **Plan's own post-plan follow-ups** — MCP tool exposure for `query_code_index` (mirrors
   `verify_output`'s wrapper in `gateway/mcp_server.py`); reference-finding ("what calls Y") as a
   natural extension of the same store, needs its own query captures + spec section.
 - [ ] Symlink-cycle regression test (`test_query_code_index_does_not_follow_a_symlinked_
@@ -250,7 +250,7 @@ From `docs/superpowers/specs/2026-08-24-repo-intelligence-methodology-packs-desi
   rounds, then finally whole-branch-reviewed with 0 blocker/0 major/3 minor — merged as-is per the
   reviewer's explicit recommendation (minors logged above). Merged to master `9fe587d`
   2026-08-24, full suite green (292 passed, 4 skipped).
-- [ ] **Phase 5 sub-project 2 of 2 (spec engine)** — `specify/plan/tasks/implement/verify`,
+- [x] **(RESOLVED 2026-10-16: spec engine v2 merged)** **Phase 5 sub-project 2 of 2 (spec engine)** — `specify/plan/tasks/implement/verify`,
   EARS-format acceptance-criteria artifacts, wrapping sub-project 1's `orchestrate_tasks`. Not
   started — needs its own brainstorm now that its dependency exists.
 
@@ -262,14 +262,14 @@ re-surface priority. Confirmed: 296 tests collected (292 pass, 4 skip — gitlea
 symlink tests need a symlink-capable machine), matching `CLAUDE.md`'s status line. No new bugs
 found beyond what was already logged above; this batch is scope/priority findings, not defects.
 
-- [ ] **`dashboard/` has zero code** — only `dashboard/CLAUDE.md` exists, confirming Phase 6 has
+- [x] **(RESOLVED: slices 6a-6d merged 2026-10-17)** **`dashboard/` has zero code** — only `dashboard/CLAUDE.md` exists, confirming Phase 6 has
   not started. First user-visible surface of the whole project; still fully blocked on Phase 5.
 - [x] **(FIXED 2026-10-20)** **`core/actions/` remains undocumented** in `core/CLAUDE.md`'s target layout diagram —
   contains `fs.py`/`models.py` (governed `fs_write` lives here per the Phase 3 entry above) but
   was never added to the doc. Audit and document its actual contents/ownership before spec-engine
   work builds anything adjacent to it (carried forward from the research-refresh entry above,
   re-confirmed still open).
-- [ ] **No SQLAlchemy/Alembic code exists anywhere in `core/`** despite being locked stack
+- [x] **(RESOLVED: `core/db/` since 2026-10-16)** **No SQLAlchemy/Alembic code exists anywhere in `core/`** despite being locked stack
   (root `CLAUDE.md:31`) — re-confirmed still true by directory scan. This is the single highest-
   risk gap for Phase 5 sub-project 2: the spec engine needs a persistence layer and no decision
   or scaffold exists yet. Decide the schema/migration approach *before* sub-project 2 starts, not
@@ -291,10 +291,10 @@ found beyond what was already logged above; this batch is scope/priority finding
 Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (292/4) is stale.
 
 - [x] **FIXED 2026-10-16** (default core audit log is now `.promptwise/agentic_audit.jsonl`; regression tests added; runtime state gitignored; suite 294 passed/4 skipped). Gap analysis: `docs/research/2026-10-16-agent-landscape-gap-analysis.md`. Original finding: **P0 — `audit.chain` doctor check FAILs on this dev repo** (`core/tests/diagnostics/test_checks.py::test_audit_chain_check_passes_by_default`, `::test_no_failures_means_clean_exit`, `scripts/tests/test_cli.py::test_doctor_exits_zero_when_no_failures`). Cause: the PromptWise *Claude Code plugin* hooks write their own-schema records (`agent`, `rules_applied`, `posttooluse_audit`…) into the same `.promptwise/audit.jsonl` Agentic OS uses; `verify_chain` fails at index 0. Real namespace collision, not tampering. Fix options: separate audit path for the core (e.g. `.promptwise/core/audit.jsonl`), and make tests use a tmp path rather than the process cwd. Also add `.promptwise/` to `.gitignore` (currently untracked noise).
-- [ ] Untracked `docs/IMPLEMENTATION_ANALYSIS.md` (2026-09-04, findings F-01..F-16, target architecture) and `docs/ADOPTION_AND_CAPABILITY_RESEARCH.md` (adoption planes, capability matrix) — review, then commit as the new shared reference docs; fold accepted items into ROADMAP. New items they raise beyond this file: no CI workflow, OpenAI-compat endpoint unbuilt, no identity/tenancy/secrets/approval layer, no OTel emission, no durable job queue.
+- [ ] **(both docs are committed now; the new items listed below are still open: OpenAI-compat endpoint, identity/tenancy/secrets/approval layer, OTel, durable job queue)** Untracked `docs/IMPLEMENTATION_ANALYSIS.md` (2026-09-04, findings F-01..F-16, target architecture) and `docs/ADOPTION_AND_CAPABILITY_RESEARCH.md` (adoption planes, capability matrix) — review, then commit as the new shared reference docs; fold accepted items into ROADMAP. New items they raise beyond this file: no CI workflow, OpenAI-compat endpoint unbuilt, no identity/tenancy/secrets/approval layer, no OTel emission, no durable job queue.
 - [x] Persistence decision made 2026-10-16: SQLAlchemy 2 + Alembic for new code (`core/db/`), existing stores migrate opportunistically — see spec-engine v2 design Ruling 5.
-- [ ] **`verify_output` vacuous pass**: empty `verify.test_command` yields `ran=False, passed=True`; v2 plan Task 0 adds `VerifyResult.grounded`. Also `run_command` shells out without `check_policy` (goal 4) — revisit when the governed `shell_exec` verb exists.
-- [ ] Spec engine design + plan exist (`specs/2026-08-31-spec-engine-design.md`, `plans/2026-08-31-spec-engine.md`) but are not executed; blocked on the persistence decision above.
+- [ ] **(PARTLY RESOLVED: `VerifyResult.grounded` exists and the spec engine rejects ungrounded passes; the `check_policy`-less shell-out remains)** **`verify_output` vacuous pass**: empty `verify.test_command` yields `ran=False, passed=True`; v2 plan Task 0 adds `VerifyResult.grounded`. Also `run_command` shells out without `check_policy` (goal 4) — revisit when the governed `shell_exec` verb exists.
+- [x] **(SUPERSEDED by spec engine v2, merged 2026-10-16)** Spec engine design + plan exist (`specs/2026-08-31-spec-engine-design.md`, `plans/2026-08-31-spec-engine.md`) but are not executed; blocked on the persistence decision above.
 
 ### From Phase 3.5 build, 2026-10-16
 
