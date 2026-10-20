@@ -19,3 +19,7 @@ compose/.env
 .promptwise/jit_grants.json
 .promptwise/audit_export.json
 .promptwise/tool_call_counts.json
+
+# Dashboard browser smoke test output
+dashboard/test-results/
+dashboard/playwright-report/

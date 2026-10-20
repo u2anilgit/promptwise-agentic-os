@@ -18,6 +18,12 @@ React 18 + Vite + TypeScript, Tailwind + shadcn/ui, TanStack Query for REST, SSE
 
 `cd dashboard && npm ci --ignore-scripts && npm test && npm run build`; the gateway serves `dashboard/dist` at `/` (strict CSP, `gateway.dashboard_dir`) when it exists. Dev: `npm run dev` proxies `/api` to `GATEWAY_URL` (default `http://127.0.0.1:8420`). Types come from `dashboard/openapi.json` (`python -m scripts.export_openapi`, then `npm run gen:api`); a Python test fails if the snapshot is stale. Rules enforced by tests: API strings render as text only (no HTML sinks), the credential is in `sessionStorage` only, the live feed uses `fetch` streaming with `Last-Event-ID` resume and is capped at 500 rows. Implemented: credential gate, audit viewer with chain verdict and live feed, diagnostics panel, spec board (stage lanes) and spec detail (requirements, tasks, checks with recorded baseline, acceptance history with independence layers read from the spec engine's audit entries). Cost view (`#/cost`: $/completed task, by tier with local/cloud badge, by agent, always labelled self-reported) and the Builder/Pro toggle (`src/mode.tsx`, sessionStorage; Builder swaps raw detail for plain sentences from `src/explain.ts`, a lookup keyed by core reason codes with raw fallback; it never hides alerts). Routing is a dependency-free hash router (`src/router.ts`: `#/audit`, `#/specs`, `#/specs/<id>`, `#/diagnostics`). Versions are pinned exactly; lockfile is committed.
 
+Browser smoke test: `npm run build && npm run e2e` (Playwright, `e2e/*.e2e.ts`). It starts a throwaway seeded gateway
+(`scripts/e2e_gateway.py`, state in the OS temp dir, its own test credential, never the operator's) and drives an
+installed browser channel (`E2E_CHANNEL`, default `msedge`; no browser download): wrong credential refused, sign-in,
+Cost view with tier locality, Builder hides raw tokens without changing data, mode survives reload, no console/CSP
+errors, audit chain verified, sign-out. Not part of `npm test` (needs a browser and the Python venv).
+
 ## Layout (target)
 
 ```

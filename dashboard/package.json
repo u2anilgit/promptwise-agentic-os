@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
-    "gen:api": "openapi-typescript openapi.json -o src/api/schema.d.ts"
+    "gen:api": "openapi-typescript openapi.json -o src/api/schema.d.ts",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@tanstack/react-query": "5.104.3",
@@ -15,6 +16,7 @@
     "react-dom": "18.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.8",
