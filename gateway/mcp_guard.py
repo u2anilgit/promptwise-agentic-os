@@ -29,6 +29,7 @@ from typing import Any, Callable, Mapping
 from core.audit.log import record_audit
 from core.config.resolve import resolve_config, resolve_config_auto, resolve_path
 from core.policy.tool_pins import guard_tool
+from core.security.untrusted import tag_untrusted
 
 # The only project-supplied values an MCP call will honour (see module docstring).
 PROJECT_VERIFY_KEYS = ("test_command", "lint_command")
@@ -167,7 +168,9 @@ def run_governed(
         result = body(GovernedCall(config=effective_config(op, root), root=root, paths=confined))
         outcome, outcome_detail = "allow", {"phase": "done", **audit_detail}
     except ValueError as exc:
-        result, outcome, outcome_detail = {"error": str(exc)}, "error", {"phase": "done", "error": str(exc), **audit_detail}
+        # Core error messages can echo caller input (ids, paths): returned wrapped as untrusted data.
+        result = {"error": tag_untrusted(str(exc), source="error").wrapped}
+        outcome, outcome_detail = "error", {"phase": "done", "error": str(exc), **audit_detail}
     except Exception as exc:  # noqa: BLE001 - never leak internals or crash the transport
         result = {"error": f"internal error: {type(exc).__name__}"}
         outcome, outcome_detail = "error", {"phase": "done", "error_type": type(exc).__name__, **audit_detail}

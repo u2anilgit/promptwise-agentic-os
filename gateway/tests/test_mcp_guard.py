@@ -108,7 +108,7 @@ def test_governed_value_error_becomes_an_error_dict(tmp_path):
         raise ValueError("unknown spec 'x'")
 
     result = run_governed("demo", {}, body, spec_lookup=_lookup, operator_config_override=_operator(tmp_path))
-    assert result == {"error": "unknown spec 'x'"}
+    assert result == {"error": '<untrusted source="error">\nunknown spec \'x\'\n</untrusted>'}  # may echo caller input
 
 
 def test_governed_unexpected_exception_is_an_internal_error_and_audited(tmp_path):
