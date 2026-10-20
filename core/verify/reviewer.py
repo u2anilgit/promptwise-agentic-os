@@ -68,4 +68,9 @@ def run_reviewer(config: dict[str, Any], cwd: Path | None, payload: dict[str, An
         return ReviewerVerdict(ran=True, error="reviewer printed malformed JSON")
     if not isinstance(verdict, dict) or not isinstance(verdict.get("approved"), bool):
         return ReviewerVerdict(ran=True, error="reviewer verdict must be an object with a boolean 'approved'")
+    # Opt-in binding: the verdict must name the evidence it judged, so a canned or replayed approval
+    # (one that never read this payload) is a rejection.
+    expected = payload.get("evidence_sha256")
+    if verify.get("reviewer_require_evidence_hash") and (not expected or verdict.get("evidence_sha256") != expected):
+        return ReviewerVerdict(ran=True, error="reviewer verdict does not echo this payload's evidence_sha256")
     return ReviewerVerdict(ran=True, approved=verdict["approved"], reasons=_bounded(verdict.get("reasons")))

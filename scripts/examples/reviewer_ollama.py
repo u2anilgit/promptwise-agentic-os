@@ -98,9 +98,12 @@ def ask_ollama(prompt: str) -> str:
 
 def review(payload: dict) -> dict:
     try:
-        return parse_verdict(ask_ollama(build_prompt(payload)))
+        verdict = parse_verdict(ask_ollama(build_prompt(payload)))
     except Exception as exc:  # noqa: BLE001 - fail closed on anything
-        return {"approved": False, "reasons": [f"reviewer could not get a verdict: {type(exc).__name__}"]}
+        verdict = {"approved": False, "reasons": [f"reviewer could not get a verdict: {type(exc).__name__}"]}
+    if payload.get("evidence_sha256"):  # binds the verdict to this evidence (verify.reviewer_require_evidence_hash)
+        verdict["evidence_sha256"] = payload["evidence_sha256"]
+    return verdict
 
 
 def main() -> None:

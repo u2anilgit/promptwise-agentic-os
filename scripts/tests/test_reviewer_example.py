@@ -112,3 +112,10 @@ def test_agent_authored_check_material_is_fenced_and_cannot_close_its_fence(fake
     assert opened >= 3  # requirement, command, file
     assert prompt.count("</untrusted>") == opened  # only the fences the script itself wrote
     assert "agent" in reviewer.INSTRUCTIONS.lower() and "frozen before the work" not in prompt
+
+
+def test_verdict_echoes_the_evidence_hash_even_when_rejecting(monkeypatch):
+    monkeypatch.setenv("REVIEWER_OLLAMA_URL", "http://127.0.0.1:9")
+    monkeypatch.setenv("REVIEWER_TIMEOUT_SECONDS", "2")
+    verdict = reviewer.review({**PAYLOAD, "evidence_sha256": "f" * 64})
+    assert verdict["approved"] is False and verdict["evidence_sha256"] == "f" * 64

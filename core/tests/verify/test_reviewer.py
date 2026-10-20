@@ -58,3 +58,32 @@ def test_missing_executable_unparsable_command_and_timeout_fail_closed(tmp_path)
         assert verdict.ran and not verdict.approved and verdict.error, command
     slow = run_reviewer(_cfg('python -c "import time; time.sleep(60)"', reviewer_timeout_seconds=1), tmp_path, PAYLOAD)
     assert slow.ran and not slow.approved and "timed out" in slow.error
+
+
+BOUND = {**PAYLOAD, "evidence_sha256": "e" * 64}
+ECHO = (
+    "import sys, json\n"
+    "data = json.load(sys.stdin)\n"
+    "print(json.dumps({'approved': True, 'reasons': [], 'evidence_sha256': data['evidence_sha256']}))\n"
+)
+CANNED = "import json\nprint(json.dumps({'approved': True, 'reasons': []}))\n"
+
+
+def test_a_required_evidence_hash_must_be_echoed(tmp_path):
+    verdict = run_reviewer(_cfg(_script(tmp_path, "canned.py", CANNED), reviewer_require_evidence_hash=True), tmp_path, BOUND)
+    assert verdict.ran and not verdict.approved and "evidence_sha256" in (verdict.error or "")
+
+
+def test_an_echoed_evidence_hash_binds_the_approval(tmp_path):
+    verdict = run_reviewer(_cfg(_script(tmp_path, "echo.py", ECHO), reviewer_require_evidence_hash=True), tmp_path, BOUND)
+    assert verdict.approved and verdict.error is None
+
+
+def test_a_wrong_evidence_hash_is_a_rejection(tmp_path):
+    wrong = ECHO.replace("data['evidence_sha256']", "'0' * 64")
+    verdict = run_reviewer(_cfg(_script(tmp_path, "wrong.py", wrong), reviewer_require_evidence_hash=True), tmp_path, BOUND)
+    assert not verdict.approved and verdict.error
+
+
+def test_evidence_hash_is_not_required_by_default(tmp_path):
+    assert run_reviewer(_cfg(_script(tmp_path, "canned.py", CANNED)), tmp_path, BOUND).approved
