@@ -45,7 +45,7 @@ uv pip compile pyproject.toml --universal --python-version 3.12 --generate-hashe
 # bump one package: add  --upgrade-package <name>
 ```
 
-A lock is only trusted after it is exercised: create a venv from the dev lock (`uv venv --python 3.12`, `uv pip sync --require-hashes requirements-dev.lock`, `uv pip install --no-deps -e .`) and run the full suite in it. `core/tests/security/test_lockfiles.py` guards that every pin is hashed, none is on the known-bad list, every direct dependency is present, and LiteLLM is absent. Add a bad release to `security/known_bad_packages.yaml` the moment an advisory lands.
+A lock is only trusted after it is exercised: create a venv from the dev lock (`uv venv --python 3.12`, `uv pip sync --require-hashes requirements-dev.lock`, `uv pip install --no-deps -e .`) and run the full suite in it. `core/tests/security/test_lockfiles.py` guards that every pin is hashed, none is on the known-bad list, every direct dependency is present, and LiteLLM is absent. Add a bad release to `security/known_bad_packages.yaml` the moment an advisory lands. A monthly workflow (`.github/workflows/relock.yml`, also runnable by hand) re-resolves both locks with `--upgrade`, runs the full suite and the doctor on the result and publishes the candidate locks as an artifact; review the diff and commit it yourself.
 
 ## 2b-1. Gateway API credential (operator reference)
 

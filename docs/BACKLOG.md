@@ -180,7 +180,7 @@ deferred (see `docs/superpowers/plans/2026-08-24-code-index.md` and
   keys and the incremental-reindex sweep silently degrades to a full reparse; a shared DB across
   two roots would delete each other's rows. Correctness holds (results always rebuild), only the
   incremental-reindex guarantee is at risk. Fix: normalize `root` and/or scope the sweep query.
-- [ ] **No `check_policy`/`record_audit` on the verb's fs/DB access** — against goal 4's "every
+- [x] **(DECIDED 2026-10-20: governed at the MCP boundary, which confines `root` to `gateway.allowed_roots` and audits every call before and after; the verb itself only reads source files and writes its own regenerable cache, so per-call audit inside core would duplicate the boundary record and flood the log from ingestion sweeps)** **No `check_policy`/`record_audit` on the verb's fs/DB access** — against goal 4's "every
   fs/shell/DB/cloud action is governed and audited", but the spec/plan are silent on it and
   existing precedent is mixed (`fs.py` gates writes, `verify_output` doesn't gate its shell-outs).
   Decide explicitly before the follow-up task that exposes `query_code_index` over MCP — that's
@@ -332,7 +332,7 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 - [ ] **(PARTLY FIXED 2026-10-20: actions pinned by commit SHA, dashboard job added; still never run on GitHub)** `.github/workflows/ci.yml` is unverified (cannot run GitHub Actions locally) and uses version tags (`actions/checkout@v4`, `actions/setup-python@v5`); pin actions by commit SHA as part of the supply-chain posture.
 - [x] **(FIXED 2026-10-20: floors raised to the locked, tested versions)** `pyproject.toml` lower bounds (e.g. `fastapi>=0.115`) are older than anything tested (lock resolves `fastapi 0.143.3`, `starlette 1.8.0`); raise floors to the tested versions or add a floor-version CI job.
 - [ ] Locked/tested set diverges from the earlier dev environment (`fastapi 0.115.12`); the suite passes on both, but only the lock set is the supported one.
-- [ ] Re-lock cadence: schedule a periodic `--upgrade` + full-suite validation and an advisory check against `security/known_bad_packages.yaml`.
+- [ ] **(PARTLY DONE 2026-10-20: `.github/workflows/relock.yml`, monthly + manual, publishes candidate locks after suite + doctor pass; never run on GitHub yet)** Re-lock cadence: schedule a periodic `--upgrade` + full-suite validation and an advisory check against `security/known_bad_packages.yaml`.
 
 ### From independent-verification build, 2026-10-17
 

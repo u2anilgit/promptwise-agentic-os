@@ -1,0 +1,42 @@
+name: relock-check
+
+# Monthly: re-resolve both lockfiles with upgrades, prove the upgraded set passes the full suite and the
+# doctor (which FAILs on any package in security/known_bad_packages.yaml), and publish the candidate locks
+# as an artifact for a human to review and commit. It never pushes or opens a PR (contents: read).
+on:
+  schedule:
+    - cron: "17 4 3 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  relock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Re-resolve with upgrades
+        run: |
+          python -m pip install --no-cache-dir uv==0.5.9
+          uv pip compile pyproject.toml --universal --python-version 3.12 --generate-hashes --no-header --upgrade -o requirements.lock
+          uv pip compile pyproject.toml --universal --python-version 3.12 --generate-hashes --no-header --extra dev -c requirements.lock --upgrade -o requirements-dev.lock
+          git diff --stat -- requirements.lock requirements-dev.lock
+      - name: Install the candidate set (hash-checked)
+        run: |
+          uv pip sync --system --require-hashes requirements-dev.lock
+          uv pip install --system --no-deps -e .
+      - name: Full suite on the candidate set
+        run: python -m pytest -q
+      - name: Doctor (known-bad packages FAIL)
+        run: python -m scripts.promptwise doctor
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-locks
+          path: |
+            requirements.lock
+            requirements-dev.lock
