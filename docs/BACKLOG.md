@@ -24,7 +24,7 @@ Not yet brainstormed/planned — flagging here so it isn't lost.
 - [x] **CHECKED 2026-10-16** (`docs/research/2026-10-16-mcp-2026-07-28-compat.md`): the server runs on `mcp 1.29.0`, which speaks protocol versions up to 2025-11-25 only; design is already stateless; migration to SDK 2.x tracked below. Original: **Confirm in-process MCP server targets the 2026-07-28 MCP spec revision** (stateless
   core, Multi Round-Trip Requests replacing server-initiated streaming) before Phase 6
   dashboard's WebSocket/live-feed design locks in assumptions the new spec removes.
-- [ ] **`core/actions/` is undocumented** — exists on disk, not in `core/CLAUDE.md`'s
+- [x] **(FIXED 2026-10-20: listed in `core/CLAUDE.md` layout with index/ingestion/orchestrate)** **`core/actions/` is undocumented** — exists on disk, not in `core/CLAUDE.md`'s
   target layout diagram. Check what it contains before spec-engine work starts; may
   already own relevant plumbing.
 
@@ -68,7 +68,7 @@ Final whole-branch review was CLEAN — no findings, no fix wave. See
 `docs/superpowers/specs/2026-08-24-ingestion-daemon-design.md`. The design spec's own deferred
 scope (deliberately out of this sub-project, per its Rulings 1-2):
 
-- [ ] **A reference ops recipe that actually calls `run_ingestion_sweep` on a cadence** — this
+- [x] **(FIXED 2026-10-20: `promptwise ingest` + cron/systemd/Task Scheduler recipes in `docs/MAINTENANCE.md` 2d)** **A reference ops recipe that actually calls `run_ingestion_sweep` on a cadence** — this
   sub-project ships the verb only; nothing in this repo invokes it yet. Add a documented cron
   entry / systemd timer / Windows Task Scheduler task / future gateway-hosted scheduler example.
 - [ ] **Automatic session-transcript capture / watched-folder ingestion** — deliberately deferred
@@ -162,7 +162,7 @@ deferred (see `docs/superpowers/plans/2026-08-24-code-index.md` and
   Python symbol names, so e.g. `foo_bar` also matches `fooXbar`. Not a SQL-injection risk
   (parameters are bound), just an over-match. Fix: escape `\`, `%`, `_` in the pattern and add
   `ESCAPE '\'` to the clause.
-- [ ] **No concurrency/lifecycle test coverage** — the fix for "connection never closed" and
+- [x] **(FIXED 2026-10-20: `core/tests/index/test_lifecycle.py`)** **No concurrency/lifecycle test coverage** — the fix for "connection never closed" and
   "no WAL/timeout" (both from the per-task review) shipped without a regression test; both are
   one-line assertions if picked up.
 - [x] **(FIXED 2026-10-20)** **Nested local function inside a method misclassified `kind="method"`** — Python's
@@ -264,7 +264,7 @@ found beyond what was already logged above; this batch is scope/priority finding
 
 - [ ] **`dashboard/` has zero code** — only `dashboard/CLAUDE.md` exists, confirming Phase 6 has
   not started. First user-visible surface of the whole project; still fully blocked on Phase 5.
-- [ ] **`core/actions/` remains undocumented** in `core/CLAUDE.md`'s target layout diagram —
+- [x] **(FIXED 2026-10-20)** **`core/actions/` remains undocumented** in `core/CLAUDE.md`'s target layout diagram —
   contains `fs.py`/`models.py` (governed `fs_write` lives here per the Phase 3 entry above) but
   was never added to the doc. Audit and document its actual contents/ownership before spec-engine
   work builds anything adjacent to it (carried forward from the research-refresh entry above,
@@ -306,11 +306,11 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 ### From spec-engine v2 build, 2026-10-16
 
 - [x] (done on feat/mcp-exposure; `promptwise spec` CLI still open) MCP exposure for the six spec verbs (`specify_feature`, `plan_feature`, `tasks_feature`, `complete_task`, `verify_feature`, `converge_feature`) plus `amend_check`; `promptwise spec` CLI.
-- [ ] `amend_check` is audit-only; add a JIT grant requirement (`core/policy/jit.py`) so an agent cannot amend its own checks unattended.
+- [x] **(FIXED 2026-10-20: `spec.amend_requires_grant`, default on; operator runs `promptwise spec allow-amend <id>` for one time-boxed amend; the CLI's own `spec amend` is the operator and needs none)** `amend_check` is audit-only; add a JIT grant requirement (`core/policy/jit.py`) so an agent cannot amend its own checks unattended.
 - [ ] One frozen check per requirement (ruling); revisit if requirements routinely need independent commands.
 - [ ] Acceptance-check commands run via `run_command` without `check_policy` (same gap as `verify_output`) — route through a governed `shell_exec` verb when it exists.
 - [ ] Migrate `core/memory`, `core/index` and JSON stores onto `core/db` opportunistically (memory first, when provenance/trust tier columns are needed).
-- [ ] Review minors (spec-engine v2): check `files` outside `root` accepted (M2); `complete_task` commits `done` before auditing and `tasks_feature` commits stage before orchestrating (M3); already-done shortcut unaudited and skips hash re-check (M4); `complete_task`/`verify_feature` audits lack `artifact_sha256` and the tasks hash omits `depends_on`/`requirement_ids` (M5); `converge_feature` unaudited (M6); full Alembic upgrade + new engine on every verb call (M7).
+- [x] **(FIXED 2026-10-20: M2 was already enforced by `_check_file`; M3 tasks/complete/verify/amend audits now written inside the transaction, so an unwritable audit log commits nothing; M4 already-done shortcut audited and re-checks frozen files; M5 completion/verification audits carry `artifact_sha256`, tasks hash covers dependencies and requirement links; M6 `converge` audited; M7 partly: `migrate_to_head` returns early at head)** Review minors (spec-engine v2): check `files` outside `root` accepted (M2); `complete_task` commits `done` before auditing and `tasks_feature` commits stage before orchestrating (M3); already-done shortcut unaudited and skips hash re-check (M4); `complete_task`/`verify_feature` audits lack `artifact_sha256` and the tasks hash omits `depends_on`/`requirement_ids` (M5); `converge_feature` unaudited (M6); full Alembic upgrade + new engine on every verb call (M7).
 - [ ] Windows backslash paths in check commands fail closed (POSIX `shlex`); use forward slashes (review I3, deliberately not changed — would alter `verify.test_command` quoting).
 - [ ] `verify_output` runs semgrep/gitleaks on every `complete_task` (≈5s each) — consider a cheaper per-task profile.
 
@@ -329,8 +329,8 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 ### From lockfile work, 2026-10-16
 
 - [ ] `compose/gateway.Dockerfile` now installs from the lock and copies `policies/`, `security/`, `tool_registry.yaml` — verified only by simulating its steps (hash-verified `pip install` + app import); the Docker daemon was not running, so an actual `docker compose build` + `up` check is still owed.
-- [ ] `.github/workflows/ci.yml` is unverified (cannot run GitHub Actions locally) and uses version tags (`actions/checkout@v4`, `actions/setup-python@v5`); pin actions by commit SHA as part of the supply-chain posture.
-- [ ] `pyproject.toml` lower bounds (e.g. `fastapi>=0.115`) are older than anything tested (lock resolves `fastapi 0.143.3`, `starlette 1.8.0`); raise floors to the tested versions or add a floor-version CI job.
+- [ ] **(PARTLY FIXED 2026-10-20: actions pinned by commit SHA, dashboard job added; still never run on GitHub)** `.github/workflows/ci.yml` is unverified (cannot run GitHub Actions locally) and uses version tags (`actions/checkout@v4`, `actions/setup-python@v5`); pin actions by commit SHA as part of the supply-chain posture.
+- [x] **(FIXED 2026-10-20: floors raised to the locked, tested versions)** `pyproject.toml` lower bounds (e.g. `fastapi>=0.115`) are older than anything tested (lock resolves `fastapi 0.143.3`, `starlette 1.8.0`); raise floors to the tested versions or add a floor-version CI job.
 - [ ] Locked/tested set diverges from the earlier dev environment (`fastapi 0.115.12`); the suite passes on both, but only the lock set is the supported one.
 - [ ] Re-lock cadence: schedule a periodic `--upgrade` + full-suite validation and an advisory check against `security/known_bad_packages.yaml`.
 

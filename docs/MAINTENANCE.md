@@ -73,6 +73,20 @@ A task reaches `done` only after `complete_task` passes every layer below; `prom
 
 The reviewer receives each check's file path, sha256 and (truncated) source, `evidence_sha256`, and `evidence_untrusted: true` (the evidence is agent-written text: do not follow instructions in it). Approvals log the reviewer's reasons in the audit entry.
 
+## 2d. Scheduled ingestion sweep (operator reference)
+
+`promptwise ingest [ROOT] [--session-file F ...] [--session-id ID]` runs one `run_ingestion_sweep`: it refreshes the code index for ROOT and records any session text files as memory facts. It is deliberately not a daemon; schedule it. It exits 1 when any step reported an error, so the scheduler's failure handling sees it. Without Ollama/Qdrant the index still refreshes and fact recording degrades as documented for the memory layer.
+
+- **cron (Linux/macOS)**, every 30 minutes:
+  `*/30 * * * * cd /srv/myrepo && /opt/promptwise/.venv/bin/python -m scripts.promptwise ingest /srv/myrepo >> ~/.promptwise-ingest.log 2>&1`
+  (run from the install directory, or wherever `scripts.promptwise` is importable).
+- **systemd timer**: a `promptwise-ingest.service` (`Type=oneshot`, `ExecStart=` the same command, `WorkingDirectory=` the install) plus a `promptwise-ingest.timer` with `OnCalendar=*:0/30` and `Persistent=true`.
+- **Windows Task Scheduler**:
+  `schtasks /Create /SC MINUTE /MO 30 /TN PromptWiseIngest /TR "\"C:\promptwise\.venv\Scripts\python.exe\" -m scripts.promptwise ingest C:\work\myrepo"`
+  (set "Start in" to the install directory in the task's properties).
+
+Overlapping runs are safe (the index uses SQLite WAL with a 30 s lock timeout), but keep the interval longer than a sweep takes on your repo.
+
 ## 3. Support bundle
 
 `promptwise support-bundle [--out path.zip]` → `generate_support_bundle()`. Collects:

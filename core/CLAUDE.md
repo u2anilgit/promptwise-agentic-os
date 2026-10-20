@@ -13,15 +13,19 @@ core/
   config/          resolve.py (§4 config layering), defaults.yaml
   routing/         route_request, catalog loader, RAM watchdog        (Phase 1)
   policy/          check_policy, grant_jit_permission, undo buffer     (Phase 3)
+  actions/         fs_write: the governed action layer (policy-gated, audited, undo-buffered) (Phase 3)
   audit/           record_audit, hash-chain, verification              (Phase 3)
   memory/          query_memory, rank_context, hybrid retrieval        (Phase 4)
+  index/           query_code_index: tree-sitter definitions, SQLite symbol store (Phase 4)
+  ingestion/       run_ingestion_sweep (index refresh + session facts)  (Phase 4)
+  orchestrate/     topological_order, orchestrate_tasks DAG runner     (Phase 5)
   verify/          verify_output, failure ledger                       (Phase 2)
   spec/            spec engine: specify/plan/tasks(freeze)/complete_task/verify/converge   (Phase 5, done)
   packs/           pack loader, manifest validation, capability grant  (Phase 8)
   diagnostics/     run_diagnostics, generate_support_bundle, redact.py (Phase 0/3)
   db/              SQLAlchemy 2.0 Base/engine/session_scope, programmatic Alembic (new durable state only)
   security/        supply_chain (deny-list + lockfile), untrusted-content tagging
-  migrations/      Alembic revisions (0001 baseline, 0002 spec engine)
+  migrations/      Alembic revisions (0001 baseline, 0002 spec engine, 0003 baselines, 0004 usage ledger)
 ```
 
 ## Conventions
