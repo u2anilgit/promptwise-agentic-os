@@ -27,6 +27,7 @@ from core.config.resolve import resolve_config_auto
 from core.db.base import session_scope
 from core.db.migrate import migrate_to_head
 from core.policy.engine import check_policy
+from core.policy.jit import check_jit_grant, revoke_jit_grant
 from core.orchestrate.graph import topological_order
 from core.orchestrate.models import Dag, DagNode, DagResult
 from core.orchestrate.runner import orchestrate_tasks
@@ -290,6 +291,11 @@ def _freeze_checks(spec: SpecArtifact, checks: list[AcceptanceCheck], base: Path
     return frozen
 
 
+def _task_shape(task: TaskNode) -> dict[str, Any]:
+    return {"id": task.id, "depends_on": task.depends_on, "requirement_ids": task.requirement_ids,
+            "expected_symbols": task.expected_symbols, "task_type": task.task_type}
+
+
 def tasks_feature(
     spec_id: str,
     tasks: list[TaskNode],
@@ -320,6 +326,14 @@ def tasks_feature(
         store.save_tasks(session, spec_id, tasks)
         store.save_frozen_checks(session, spec_id, frozen)
         store.set_stage(session, spec_id, "tasked")
+        # Audited inside the transaction: if the record cannot be written, nothing commits.
+        _audit(config, "tasks", spec_id, {
+            "artifact_sha256": _sha({"tasks": [_task_shape(t) for t in tasks], "checks": [c.model_dump() for c in frozen]}),
+            "task_count": len(tasks),
+            "unreferenced_check_files": _unreferenced_check_files(checks),
+            "baselines": {f.requirement_id: f.baseline for f in frozen},
+            "expect_baselines": {f.requirement_id: f.expect_baseline for f in frozen},
+        })
 
     automated: DagResult | None = None
     callable_nodes = [DagNode(id=t.id, run=t.run, depends_on=t.depends_on, task_type=t.task_type) for t in tasks if t.run is not None]  # type: ignore[arg-type]
@@ -333,13 +347,6 @@ def tasks_feature(
                     store.set_task_status(session, spec_id, node_id, "error", error=result.error or "a dependency did not complete")
                 # status "done": work executed, but completion is decided by complete_task's gate.
 
-    _audit(config, "tasks", spec_id, {
-        "artifact_sha256": _sha({"tasks": [t.id for t in tasks], "checks": [c.model_dump() for c in frozen]}),
-        "task_count": len(tasks),
-        "unreferenced_check_files": _unreferenced_check_files(checks),
-        "baselines": {f.requirement_id: f.baseline for f in frozen},
-        "expect_baselines": {f.requirement_id: f.expect_baseline for f in frozen},
-    })
     return TasksResult(spec_id=spec_id, frozen=frozen, automated=automated)
 
 
@@ -404,21 +411,25 @@ def complete_task(
         task = records[task_id]
         frozen = {c.requirement_id: c for c in store.get_frozen_checks(session, spec_id)}
 
-    if task.status == "done":
-        return CompletionResult(task_id=task_id, accepted=True, status="done")
-
     def reject(reasons: list[str], verify: VerifyResult | None = None, extra: dict[str, Any] | None = None, notes: list[str] | None = None) -> CompletionResult:
         _audit(config, "complete_task", spec_id, {"task_id": task_id, "reasons": reasons, **(extra or {})}, result="deny")
         return CompletionResult(task_id=task_id, accepted=False, status=task.status, reasons=reasons, verify=verify, notes=notes or [])
 
+    task_checks = [frozen[rid] for rid in task.requirement_ids if rid in frozen]
+    modified = [f"acceptance_check_modified:{f}" for c in task_checks for f in _unchanged(base, c)]
+
+    if task.status == "done":  # idempotent, but only while the checks that accepted it are intact
+        if modified:
+            return reject(modified, extra={"already_done": True})
+        _audit(config, "complete_task", spec_id, {"task_id": task_id, "already_done": True})
+        return CompletionResult(task_id=task_id, accepted=True, status="done")
+
     if any(records[d].status != "done" for d in task.depends_on if d in records):
         return reject(["dependency_not_done"])
 
-    task_checks = [frozen[rid] for rid in task.requirement_ids if rid in frozen]
     if not task_checks:
         return reject(["no_acceptance_check"])
 
-    modified = [f"acceptance_check_modified:{f}" for c in task_checks for f in _unchanged(base, c)]
     if modified:
         return reject(modified)
 
@@ -474,13 +485,20 @@ def complete_task(
             return reject(["reviewer_rejected"], verify, extra={"reviewer_reasons": verdict.reasons}, notes=verdict.reasons)
         reviewer_approved = True
 
+    independence = {"baseline_red": all(c.baseline == "failed" for c in task_checks), "mutation": verify.mutation_passed, "reviewer": reviewer_approved}
+    artifact = _sha({"task_id": task_id, "evidence_sha256": payload["evidence_sha256"], "checks": [c.model_dump() for c in task_checks]})
     with session_scope(config, root) as session:
         store.set_task_status(session, spec_id, task_id, "done")
         store.set_stage(session, spec_id, "implementing")
-    independence = {"baseline_red": all(c.baseline == "failed" for c in task_checks), "mutation": verify.mutation_passed, "reviewer": reviewer_approved}
-    _audit(config, "complete_task", spec_id, {"task_id": task_id, "grounded": verify.grounded, "checks": [c.requirement_id for c in task_checks], "independence": independence,
-                                          "reviewer_reasons": verdict.reasons if reviewer_approved else []})
+        # Audited inside the transaction: if the record cannot be written, the completion does not commit.
+        _audit(config, "complete_task", spec_id, {"task_id": task_id, "artifact_sha256": artifact, "grounded": verify.grounded,
+                                              "checks": [c.requirement_id for c in task_checks], "independence": independence,
+                                              "reviewer_reasons": verdict.reasons if reviewer_approved else []})
     return CompletionResult(task_id=task_id, accepted=True, status="done", verify=verify, independence=independence)
+
+
+def amend_grant_scope(spec_id: str) -> str:
+    return f"spec:amend:{spec_id}"
 
 
 def amend_check(
@@ -490,11 +508,23 @@ def amend_check(
     reason: str,
     config: dict[str, Any] | None = None,
     root: Path | None = None,
+    require_grant: bool = True,
 ) -> FrozenCheck:
+    """Replace a frozen check. Unless the operator is acting directly (require_grant=False, the CLI) or has
+    switched spec.amend_requires_grant off, this needs a one-shot JIT grant for the spec, so an agent cannot
+    rewrite the checks that judge its own work unattended. The grant is used up only by a successful amend."""
     config = _prepare(config, root)
     base = Path(root) if root else Path.cwd()
     if not reason.strip():
         raise ValueError("amend_check requires a non-empty reason")
+    scope = amend_grant_scope(spec_id)
+    needs_grant = require_grant and _spec_setting(config, "amend_requires_grant", True)
+    if needs_grant and not check_jit_grant(config, scope):
+        _audit(config, "amend_check", spec_id, {"requirement_id": requirement_id, "reason": "amend_requires_grant"}, result="deny")
+        raise ValueError(
+            f"amending a check of spec '{spec_id}' needs an operator grant: run "
+            f"`promptwise spec allow-amend {spec_id}` (one amend, time-boxed), then retry"
+        )
     if new_check.requirement_id != requirement_id:
         raise ValueError(f"new_check.requirement_id '{new_check.requirement_id}' does not match requirement '{requirement_id}'")
     _validate_check_command(new_check, config)
@@ -520,14 +550,23 @@ def amend_check(
             store.set_task_status(session, spec_id, reopened, "pending")
         if store.get_stage(session, spec_id) == "verified":
             store.set_stage(session, spec_id, "implementing")
-    _audit(config, "amend_check", spec_id, {
-        "tasks_reset": reset,
-        "requirement_id": requirement_id, "reason": reason,
-        "old_command": old.command, "new_command": new.command,
-        "old_hashes": old.file_hashes, "new_hashes": new.file_hashes,
-        "old_expect_baseline": old.expect_baseline, "new_expect_baseline": new.expect_baseline,
-        "old_baseline": old.baseline, "new_baseline": new.baseline,
-    })
+        # Inside the transaction, in this order: the grant is re-checked (the baseline run may have outlasted
+        # it), the change is audited, and only then is the grant used up. Any failure commits nothing; a
+        # failure before the revoke leaves the grant usable.
+        if needs_grant and not check_jit_grant(config, scope):
+            raise ValueError(f"the amend grant for spec '{spec_id}' expired or was used while this amend ran; retry with a new grant")
+        _audit(config, "amend_check", spec_id, {
+            "granted": needs_grant,
+            "operator_direct": not require_grant,  # the CLI's own `spec amend`; anyone with that shell access counts as the operator
+            "tasks_reset": reset,
+            "requirement_id": requirement_id, "reason": reason,
+            "old_command": old.command, "new_command": new.command,
+            "old_hashes": old.file_hashes, "new_hashes": new.file_hashes,
+            "old_expect_baseline": old.expect_baseline, "new_expect_baseline": new.expect_baseline,
+            "old_baseline": old.baseline, "new_baseline": new.baseline,
+        })
+        if needs_grant and not revoke_jit_grant(config, scope):
+            raise ValueError(f"the amend grant for spec '{spec_id}' expired or was used while this amend ran; retry with a new grant")
     return new
 
 
@@ -549,11 +588,12 @@ def verify_feature(spec_id: str, config: dict[str, Any] | None = None, root: Pat
         verified = not outstanding and not uncovered
         if verified:
             store.set_stage(session, spec_id, "verified")
-    _audit(
-        config, "verify_feature", spec_id,
-        {"verified": verified, "outstanding": outstanding, "uncovered_requirements": uncovered},
-        result="allow" if verified else "deny",
-    )
+        artifact = _sha({"tasks": sorted((t.task_id, t.status) for t in tasks), "checks": [c.model_dump() for c in store.get_frozen_checks(session, spec_id)]})
+        _audit(
+            config, "verify_feature", spec_id,
+            {"verified": verified, "artifact_sha256": artifact, "outstanding": outstanding, "uncovered_requirements": uncovered},
+            result="allow" if verified else "deny",
+        )
     return VerifyFeatureResult(spec_id=spec_id, verified=verified, outstanding=outstanding, uncovered_requirements=uncovered)
 
 
@@ -595,6 +635,8 @@ def converge_feature(spec_id: str, config: dict[str, Any] | None = None, root: P
         reasons += [f"symbol_missing:{s}" for s in _missing_symbols(symbols, base, config)]
 
     done = sum(1 for t in tasks if t.status == "done")
+    _audit(config, "converge", spec_id, {"stale": bool(reasons), "reasons": reasons, "done_tasks": done, "planned_tasks": len(tasks)},
+           result="deny" if reasons else "allow")
     return ConvergeReport(
         spec_id=spec_id, planned_tasks=len(tasks), done_tasks=done, pending_tasks=len(tasks) - done,
         stale=bool(reasons), reasons=reasons,

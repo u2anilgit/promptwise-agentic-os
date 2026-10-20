@@ -23,7 +23,7 @@ def project(tmp_path):
         "database": {"url": f"sqlite:///{(tmp_path / 'spec.db').as_posix()}"},
         "audit": {"log_path": str(tmp_path / "audit.jsonl")},
         "verify": {"test_command": "", "lint_command": "", "failure_ledger_path": str(tmp_path / "ledger.json")},
-        "spec": {"allow_ungrounded": False, "trivial_max_requirements": 1, "check_timeout_seconds": 20},
+        "spec": {"allow_ungrounded": False, "trivial_max_requirements": 1, "check_timeout_seconds": 20, "amend_requires_grant": False},
     }
     return tmp_path, config
 
