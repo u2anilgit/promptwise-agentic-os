@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -134,6 +136,80 @@ class ChainStatus(BaseModel):
     broken_at: int | None = None
 
 
+@dataclass
+class _Verified:
+    offset: int  # bytes of complete, verified lines
+    digest: Any  # sha256 over those bytes, so an edit anywhere in the prefix is noticed
+    prev_hash: str
+    lines: int
+
+
+_VERIFIED: dict[str, _Verified] = {}
+_VERIFIED_LOCK = threading.Lock()
+_READ_CHUNK = 1 << 20
+
+
 def chain_status(config: dict[str, Any]) -> ChainStatus:
-    ok, broken_at = verify_chain(config)
-    return ChainStatus(ok=ok, broken_at=broken_at)
+    """verify_chain for frequent callers (the dashboard polls it). The verified prefix is re-digested as
+    raw bytes on every call (cheap) instead of re-parsed and re-hashed record by record, so an append costs
+    the new records only while any edit, truncation or same-size rewrite of earlier bytes is still caught
+    and triggers a full re-verification. A trailing line without its newline (a writer mid-append) is left
+    for the next call. Malformed lines report as a break rather than raising."""
+    path = _log_path(config)
+    key = str(path.resolve())
+    with _VERIFIED_LOCK:
+        if not path.exists():
+            _VERIFIED.pop(key, None)
+            return ChainStatus(ok=True)
+        state = _VERIFIED.get(key)
+        with path.open("rb") as f:
+            if state is not None and not _prefix_matches(f, state):
+                state = None
+            if state is None:
+                f.seek(0)
+                state = _Verified(offset=0, digest=hashlib.sha256(), prev_hash=GENESIS_HASH, lines=0)
+            broken_at = _verify_from(f, state)
+        if broken_at is not None:
+            _VERIFIED.pop(key, None)
+            return ChainStatus(ok=False, broken_at=broken_at)
+        _VERIFIED[key] = state
+        return ChainStatus(ok=True)
+
+
+def _prefix_matches(f, state: _Verified) -> bool:
+    digest = hashlib.sha256()
+    remaining = state.offset
+    while remaining:
+        chunk = f.read(min(_READ_CHUNK, remaining))
+        if not chunk:
+            return False  # the file is shorter than what was verified
+        digest.update(chunk)
+        remaining -= len(chunk)
+    return digest.digest() == state.digest.digest()
+
+
+def _verify_from(f, state: _Verified) -> int | None:
+    """Verify complete lines from the current position (state.offset), advancing state in place.
+    Returns the zero-based line index of the first break, or None."""
+    pending = b""
+    while True:
+        chunk = f.read(_READ_CHUNK)
+        if not chunk:
+            return None
+        pending += chunk
+        *complete, pending = pending.split(b"\n")
+        for raw in complete:
+            line = raw + b"\n"
+            if raw.strip():
+                try:
+                    data = json.loads(raw.decode("utf-8"))
+                    claimed_hash = data.pop("hash")
+                    intact = data["prev_hash"] == state.prev_hash and _record_hash(data) == claimed_hash
+                except (ValueError, KeyError, TypeError, AttributeError):
+                    intact = False
+                if not intact:
+                    return state.lines
+                state.prev_hash = claimed_hash
+            state.digest.update(line)
+            state.offset += len(line)
+            state.lines += 1
