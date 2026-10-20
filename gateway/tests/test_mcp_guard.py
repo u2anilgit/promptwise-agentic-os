@@ -67,6 +67,19 @@ def test_confine_rejects_a_symlink_that_escapes(tmp_path):
     assert confine(op, str(link)) is None
 
 
+@pytest.mark.skipif(os.name != "nt", reason="directory junctions are Windows-only")
+def test_confine_rejects_a_junction_that_escapes(tmp_path):
+    """Junctions need no privilege, so this gives the escape check real coverage on Windows."""
+    import subprocess
+
+    op = _operator(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    link = tmp_path / "work" / "junction"
+    assert subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(outside)], capture_output=True).returncode == 0
+    assert confine(op, str(link)) is None
+    assert confine(op, str(link / "sub")) is None
+
 
 def test_governed_runs_the_body_and_audits_the_call(tmp_path):
     op = _operator(tmp_path)

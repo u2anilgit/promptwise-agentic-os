@@ -217,7 +217,8 @@ def _tree_state(base: Path, exclude: set[str] = frozenset()) -> dict[str, tuple[
     """(size, mtime_ns) of every project file outside well-known cache/VCS dirs and `exclude`; None if the tree is too big to watch."""
     state: dict[str, tuple[int, int]] = {}
     for dirpath, dirnames, filenames in os.walk(base):
-        dirnames[:] = [d for d in dirnames if d not in _TREE_IGNORED]
+        # Linked directories (symlinks, Windows junctions) point outside the tree: not watched.
+        dirnames[:] = [d for d in dirnames if d not in _TREE_IGNORED and not (os.path.islink(os.path.join(dirpath, d)) or os.path.isjunction(os.path.join(dirpath, d)))]
         for name in filenames:
             path = Path(dirpath) / name
             try:

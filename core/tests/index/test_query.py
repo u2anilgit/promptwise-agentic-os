@@ -223,3 +223,26 @@ def test_legacy_relative_keys_are_swept(tmp_path):
         assert "repo/old.py" not in indexed_files(conn)
     finally:
         conn.close()
+
+
+def _make_junction(link: Path, target: Path) -> bool:
+    """Windows directory junction (no admin privilege needed, unlike symlinks)."""
+    import subprocess
+    import sys
+
+    if sys.platform != "win32":
+        return False
+    proc = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)], capture_output=True)
+    return proc.returncode == 0
+
+
+@pytest.mark.skipif(os.name != "nt", reason="directory junctions are Windows-only")
+def test_query_code_index_does_not_follow_a_junction_out_of_the_root(tmp_path):
+    outside = tmp_path / "outside"
+    _write(outside / "secret.py", "def outside_symbol():\n    pass\n")
+    root = tmp_path / "repo"
+    _write(root / "inside.py", "def inside_symbol():\n    pass\n")
+    assert _make_junction(root / "linked", outside)
+    config = {"index": {"db_path": str(tmp_path / "idx.sqlite3")}}
+    assert query_code_index("outside_symbol", root=root, config=config) == []
+    assert len(query_code_index("inside_symbol", root=root, config=config)) == 1

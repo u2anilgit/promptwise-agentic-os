@@ -37,14 +37,20 @@ def _iter_source_files(root: Path):
     race handled a few lines below in query_code_index.
     """
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        # followlinks=False does not stop Windows junctions: prune any linked directory explicitly so the
+        # walk can never leave root (an MCP caller picks root; a junction must not widen it).
         dirnames[:] = [
             name for name in dirnames
-            if name not in _IGNORED_DIR_NAMES and not name.startswith(".")
+            if name not in _IGNORED_DIR_NAMES and not name.startswith(".") and not _is_link(Path(dirpath) / name)
         ]
         for filename in filenames:
             path = Path(dirpath) / filename
-            if path.suffix in LANGUAGES:
+            if path.suffix in LANGUAGES and not _is_link(path):
                 yield path
+
+
+def _is_link(path: Path) -> bool:
+    return os.path.islink(path) or os.path.isjunction(path)
 
 
 def _under(file_key: str, root: Path) -> bool:
