@@ -3,6 +3,7 @@
 core/migrations/env.py through Config.attributes."""
 from __future__ import annotations
 
+import functools
 import threading
 from pathlib import Path
 from typing import Any
@@ -28,14 +29,16 @@ def _alembic_config(engine=None) -> Config:
     return cfg
 
 
+@functools.cache  # the revision scripts ship with the code; they cannot change in-process
 def head_revision() -> str:
     head = ScriptDirectory.from_config(_alembic_config()).get_current_head()
     assert head is not None
     return head
 
 
-def known_revisions() -> set[str]:
-    return {rev.revision for rev in ScriptDirectory.from_config(_alembic_config()).walk_revisions()}
+@functools.cache
+def known_revisions() -> frozenset[str]:
+    return frozenset({rev.revision for rev in ScriptDirectory.from_config(_alembic_config()).walk_revisions()})
 
 
 def _sqlite_file_missing(config: dict[str, Any], root: Path | None) -> bool:
@@ -65,6 +68,8 @@ def migrate_to_head(config: dict[str, Any], root: Path | None = None) -> str:
                 f"database revision {current} is newer than this code (head {head_revision()}) - "
                 "upgrade the code; do not downgrade the data"
             )
+        if current == head_revision():
+            return current  # already at head: skip loading Alembic's environment on every call
         engine = make_engine(config, root)
         try:
             command.upgrade(_alembic_config(engine), "head")

@@ -56,3 +56,23 @@ def test_migrate_to_head_is_idempotent(tmp_path):
     config = _config(tmp_path)
     migrate_to_head(config)
     assert migrate_to_head(config) == head_revision()
+
+
+def test_migrate_to_head_skips_alembic_when_already_at_head(tmp_path, monkeypatch):
+    """GET routes call migrate_to_head on every request; at head it must be a cheap revision read."""
+    import core.db.migrate as migrate
+
+    config = _config(tmp_path)
+    migrate_to_head(config)
+    calls = []
+    monkeypatch.setattr(migrate.command, "upgrade", lambda *a, **k: calls.append(a))
+    assert migrate_to_head(config) == head_revision()
+    assert calls == []
+
+
+def test_head_revision_is_cached(monkeypatch):
+    import core.db.migrate as migrate
+
+    head_revision()
+    monkeypatch.setattr(migrate.ScriptDirectory, "from_config", lambda *a, **k: pytest.fail("rescanned"))
+    assert head_revision()
