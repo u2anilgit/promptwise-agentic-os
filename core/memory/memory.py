@@ -13,6 +13,7 @@ Every query_memory call is audited, with result and PII-exclusion counts.
 from __future__ import annotations
 
 import time
+import os
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,18 @@ def _qdrant_client(config: dict[str, Any]) -> QdrantClient:
     return QdrantClient(url=url)
 
 
+def _store_root(root: str | None, config: dict[str, Any] | None) -> Path | None:
+    """Where the memory store lives. A project call uses its root. A root-less (session/user) call with no
+    explicit config uses the user's PromptWise home ($PROMPTWISE_HOME, default the home directory), never
+    the process cwd, which for an MCP or scheduled caller is unrelated to the session. With an explicit
+    config the caller (e.g. the gateway, whose governance state is pinned) decides."""
+    if root:
+        return Path(root)
+    if config is not None:
+        return None
+    return Path(os.environ.get("PROMPTWISE_HOME") or Path.home())
+
+
 def record_memory(
     text: str,
     scope: str,
@@ -48,8 +61,9 @@ def record_memory(
     Qdrant vector). `session_id` is persisted on both stores so
     query_memory can isolate by it.
     """
-    config = config if config is not None else resolve_config_auto(root=Path(root) if root else None)
-    conn = open_store(config, root=Path(root) if root else None)
+    base = _store_root(root, config)
+    config = config if config is not None else resolve_config_auto(root=base)
+    conn = open_store(config, root=base)
 
     try:
         client: QdrantClient | None = qdrant_client if qdrant_client is not None else _qdrant_client(config)
@@ -97,8 +111,9 @@ def query_memory(
     """Fused BM25 + vector retrieval over recorded facts, filtered by
     `scope`, `root` and (when given) `session_id`. Always audited.
     """
-    config = config if config is not None else resolve_config_auto(root=Path(root) if root else None)
-    conn = open_store(config, root=Path(root) if root else None)
+    base = _store_root(root, config)
+    config = config if config is not None else resolve_config_auto(root=base)
+    conn = open_store(config, root=base)
 
     try:
         client: QdrantClient | None = qdrant_client if qdrant_client is not None else _qdrant_client(config)

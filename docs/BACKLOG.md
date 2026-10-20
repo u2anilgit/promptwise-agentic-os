@@ -119,7 +119,7 @@ deferred:
   sibling fact. Conservative (over-flags, never under-flags), not a leak, but degrades
   `allow_pii=False` recall over time. Fix (later): flag per extracted fact instead, or document
   the whole-input choice as intentional.
-- [ ] **Session-scope config resolution falls back to process cwd** — `record_memory`/
+- [x] **(FIXED 2026-10-20: root-less calls without a config use `$PROMPTWISE_HOME` (default the home dir), so the store is `~/.promptwise/memory.sqlite3`; with an explicit config the caller decides, as the gateway does)** **Session-scope config resolution falls back to process cwd** — `record_memory`/
   `query_memory` call `resolve_config_auto(root=Path(root) if root else None)`; for legitimate
   session-scope calls `root` is `None`, so config/db-path resolution falls back to process cwd —
   the same bug *class* Phase 2 already fixed once (MCP caller cwd ≠ target project cwd). Only
