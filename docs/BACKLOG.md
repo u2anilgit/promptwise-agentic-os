@@ -343,6 +343,13 @@ Full suite run: **289 passed, 4 skipped, 3 FAILED** — status line elsewhere (2
 - [ ] **(2026-10-20: opt-in binding via `verify.reviewer_require_evidence_hash`; the reference reviewer echoes the hash; signing and a tree digest are still open)** Reviewer verdicts are not signed or bound to the verdict's own evidence hash (the payload carries `evidence_sha256`, but the reviewer need not echo it); no tree digest is sent. Mutation and reviewer commands are not routed through `check_policy` (operator-defined) and the reviewer inherits the gateway's full environment by design (it may need model API keys).
 - [ ] Most legacy tests use `expect_baseline='pass'` fixtures (explicit guards); the default red-first path has dedicated tests but consider converting more fixtures.
 
+### From the 2026-10-20 batch-3 review (minors, not fixed)
+
+- [ ] `install_pack` counts a symlink/junction at `packs/installed/<dep>` as an installed dependency (reads its manifest through the link) while `list_installed_packs` ignores it; use `_is_link` in the missing-deps check.
+- [ ] `install_pack`'s `shutil.copytree` follows junctions inside a registry pack (`DirEntry.is_symlink()` is False for junctions); add an `ignore=` callback dropping links and junctions. Registry source is repo-controlled, so low risk.
+- [ ] `core/spec/engine.py` tree-watch link check is a long inline comprehension; reuse an `_is_link` helper like `core/index/query.py`'s.
+- [ ] Tailwind 4 migration to clear the remaining dev-only npm advisories (braces, micromatch, chokidar, postcss-selector-parser via Tailwind 3).
+
 ## Resolved
 
 - [x] Pack-loader foundation itself (schema/loader/registry/CLI/doctor wiring, `intelligence` pack kind) — `docs/superpowers/plans/2026-08-24-pack-loader-foundation.md`, merged `aa9cf4a` 2026-08-24.
