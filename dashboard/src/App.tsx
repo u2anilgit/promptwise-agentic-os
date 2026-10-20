@@ -8,7 +8,7 @@ import { CostView } from "./features/cost/CostView";
 import { ModeToggle } from "./mode";
 import { SpecBoard } from "./features/specs/SpecBoard";
 import { SpecDetail } from "./features/specs/SpecDetail";
-import { navigate, useRoute } from "./router";
+import { hrefFor, navigate, useRoute } from "./router";
 
 const NAV = [
   { name: "audit", label: "Audit" },
@@ -38,14 +38,14 @@ export default function App() {
         <nav className="flex flex-wrap items-center gap-2 text-sm">
           <ModeToggle />
           {NAV.map((item) => (
-            <button
+            <a
               key={item.name}
-              onClick={() => navigate({ name: item.name })}
+              href={hrefFor({ name: item.name })}
               aria-current={section === item.name ? "page" : undefined}
               className={`rounded px-3 py-1 ${section === item.name ? "bg-accent text-accent-fg" : "border"}`}
             >
               {item.label}
-            </button>
+            </a>
           ))}
           <button onClick={signOut} className="rounded border px-3 py-1">Sign out</button>
         </nav>

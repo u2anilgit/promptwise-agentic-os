@@ -42,7 +42,10 @@ describe("App routing", () => {
     window.location.hash = "#/specs";
     renderApp();
     expect(await screen.findByRole("heading", { name: "Specs" })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
+    const link = screen.getByRole("link", { name: "Diagnostics" });
+    expect(link).toHaveAttribute("href", "#/diagnostics"); // real links: open in a new tab, copy, middle-click
+    expect(screen.getByRole("link", { name: "Specs" })).toHaveAttribute("aria-current", "page");
+    await userEvent.click(link);
     expect(window.location.hash).toBe("#/diagnostics");
     expect(await screen.findByRole("heading", { name: "Diagnostics" })).toBeInTheDocument();
   });
