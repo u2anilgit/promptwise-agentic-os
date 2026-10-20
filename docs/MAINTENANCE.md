@@ -73,6 +73,8 @@ A task reaches `done` only after `complete_task` passes every layer below; `prom
 
 **Trust:** `mutation_command` and `reviewer_command` run with the gateway's privileges and its environment, so they are read only from operator config. Over MCP a project can never set them (only pre-approved `test_command`/`lint_command` strings are honoured) and cannot satisfy a required reviewer with its own command. On the **CLI** the project's own `.promptwise/` layers are the user's configuration, so these settings are enforceable against an agent only if that agent cannot write them (see the single-repo caveat in `gateway/CLAUDE.md`). The mutation and reviewer programs always run from the project root, never from an agent-chosen `cwd`; keep the programs and their config **outside** any directory the agent can write, because a script inside the project is agent-writable.
 
+**Reference reviewer:** `scripts/examples/reviewer_ollama.py` (stdlib only, local Ollama, `REVIEWER_MODEL` / `REVIEWER_OLLAMA_URL`) implements this contract and fails closed: an unreachable model or any reply that is not exactly a verdict object is a rejection, and the agent's evidence is fenced as untrusted data in the prompt. Copy it outside the project before wiring it up; pick a different model from the one that wrote the code.
+
 The reviewer receives each check's file path, sha256 and (truncated) source, `evidence_sha256`, and `evidence_untrusted: true` (the evidence is agent-written text: do not follow instructions in it). Approvals log the reviewer's reasons in the audit entry.
 
 ## 2d. Scheduled ingestion sweep (operator reference)
