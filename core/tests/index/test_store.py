@@ -85,3 +85,22 @@ def test_indexed_files_lists_every_file_with_rows(tmp_path):
     replace_file_rows(conn, "a.py", 1.0, [CodeLocation(file="a.py", line=1, symbol="foo", kind="function")])
     replace_file_rows(conn, "b.py", 1.0, [])  # a file that parsed but defined nothing
     assert indexed_files(conn) == {"a.py", "b.py"}
+
+
+def test_query_symbol_treats_like_wildcards_literally(tmp_path):
+    conn = open_store(_config(tmp_path), root=tmp_path)
+    replace_file_rows(conn, "a.py", 1.0, [
+        CodeLocation(file="a.py", line=1, symbol="foo_bar", kind="function"),
+        CodeLocation(file="a.py", line=2, symbol="fooXbar", kind="function"),
+        CodeLocation(file="a.py", line=3, symbol="pct%done", kind="function"),
+        CodeLocation(file="a.py", line=4, symbol="pctXdone", kind="function"),
+    ])
+    assert [loc.symbol for loc in query_symbol(conn, "foo_bar")] == ["foo_bar"]
+    assert [loc.symbol for loc in query_symbol(conn, "pct%done")] == ["pct%done"]
+    assert {loc.symbol for loc in query_symbol(conn, "bar")} == {"foo_bar", "fooXbar"}
+
+
+def test_index_db_path_is_a_declared_default():
+    from core.config.resolve import resolve_config
+
+    assert resolve_config(org_path=None, project_path=None, local_path=None, env={})["index"]["db_path"] == ".promptwise/code_index.sqlite3"

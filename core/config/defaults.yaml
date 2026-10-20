@@ -40,6 +40,8 @@ security:
   require_tool_pins: false
 audit:
   log_path: .promptwise/agentic_audit.jsonl
+index:
+  db_path: .promptwise/code_index.sqlite3
 memory:
   db_path: .promptwise/memory.sqlite3
   qdrant_url: http://127.0.0.1:6333

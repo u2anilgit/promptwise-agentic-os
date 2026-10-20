@@ -11,7 +11,11 @@ from core.orchestrate.models import Dag
 
 
 def topological_order(dag: Dag) -> list[str]:
-    node_ids = {node.id for node in dag.nodes}
+    node_ids: set[str] = set()
+    for node in dag.nodes:
+        if node.id in node_ids:
+            raise ValueError(f"duplicate node id {node.id!r}")
+        node_ids.add(node.id)
     for node in dag.nodes:
         for dep in node.depends_on:
             if dep not in node_ids:

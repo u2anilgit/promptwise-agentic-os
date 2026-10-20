@@ -16,10 +16,13 @@ from core.index.models import CodeLocation
 
 
 def _is_inside_class(node) -> bool:
+    # The nearest enclosing definition decides: a function nested in a method is a plain function.
     parent = node.parent
     while parent is not None:
         if parent.type == "class_definition":
             return True
+        if parent.type == "function_definition":
+            return False
         parent = parent.parent
     return False
 

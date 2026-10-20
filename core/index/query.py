@@ -47,13 +47,18 @@ def _iter_source_files(root: Path):
                 yield path
 
 
+def _under(file_key: str, root: Path) -> bool:
+    return Path(file_key).is_relative_to(root)
+
+
 def query_code_index(
     symbol: str,
     kind: str | None = None,
     root: Path | None = None,
     config: dict[str, Any] | None = None,
 ) -> list[CodeLocation]:
-    root = root if root is not None else Path.cwd()
+    # Resolved, so a relative and an absolute spelling of one repo share file keys (and the incremental index).
+    root = (root if root is not None else Path.cwd()).resolve()
     if not root.is_dir():
         return []
 
@@ -75,9 +80,10 @@ def query_code_index(
             locations = parse_file(path)
             replace_file_rows(conn, file_key, current_mtime, locations)
 
-        for stale_file in indexed_files(conn) - seen_files:
+        # One database may serve several roots: only this root's rows are swept or returned.
+        for stale_file in {f for f in indexed_files(conn) if _under(f, root)} - seen_files:
             delete_file_rows(conn, stale_file)
 
-        return query_symbol(conn, symbol, kind)
+        return [loc for loc in query_symbol(conn, symbol, kind) if _under(loc.file, root)]
     finally:
         conn.close()

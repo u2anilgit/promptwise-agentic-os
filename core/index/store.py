@@ -69,8 +69,10 @@ def delete_file_rows(conn: sqlite3.Connection, file: str) -> None:
 
 
 def query_symbol(conn: sqlite3.Connection, symbol: str, kind: str | None = None) -> list[CodeLocation]:
-    sql = "SELECT symbol, kind, file, line FROM code_index WHERE symbol LIKE ?"
-    params: list[Any] = [f"%{symbol}%"]
+    # Escape LIKE wildcards: `_` is common in symbol names and must match only itself.
+    escaped = symbol.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+    sql = "SELECT symbol, kind, file, line FROM code_index WHERE symbol LIKE ? ESCAPE '!'"
+    params: list[Any] = [f"%{escaped}%"]
     if kind is not None:
         sql += " AND kind = ?"
         params.append(kind)

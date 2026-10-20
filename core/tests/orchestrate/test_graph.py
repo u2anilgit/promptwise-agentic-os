@@ -45,3 +45,9 @@ def test_topological_order_raises_on_a_cycle():
 def test_topological_order_on_an_empty_dag_returns_empty_list():
     dag = Dag(name="empty", nodes=[])
     assert topological_order(dag) == []
+
+
+def test_duplicate_node_ids_are_reported_as_duplicates_not_a_cycle():
+    dag = Dag(name="dup", nodes=[_node("a"), _node("b", ["a"]), _node("a")])
+    with pytest.raises(ValueError, match="duplicate node id 'a'"):
+        topological_order(dag)

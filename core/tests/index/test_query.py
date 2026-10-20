@@ -180,3 +180,29 @@ def test_query_code_index_does_not_follow_a_symlinked_directory_cycle(tmp_path):
     results = query_code_index("alpha", root=tmp_path)
     assert len(results) == 1
     assert results[0].file == str(tmp_path / "real.py")
+
+
+def test_roots_sharing_one_index_database_do_not_evict_or_leak_each_other(tmp_path, monkeypatch):
+    import core.index.query as query_module
+
+    config = {"index": {"db_path": str(tmp_path / "shared.sqlite3")}}
+    _write(tmp_path / "a" / "one.py", "def shared_name():\n    pass\n")
+    _write(tmp_path / "b" / "two.py", "def shared_name():\n    pass\n")
+    from_a = query_code_index("shared_name", root=tmp_path / "a", config=config)
+    from_b = query_code_index("shared_name", root=tmp_path / "b", config=config)
+    assert [Path(loc.file).name for loc in from_a] == ["one.py"]
+    assert [Path(loc.file).name for loc in from_b] == ["two.py"]
+    monkeypatch.setattr(query_module, "parse_file", lambda path: pytest.fail(f"evicted and reparsed {path}"))
+    again = query_code_index("shared_name", root=tmp_path / "a", config=config)
+    assert [Path(loc.file).name for loc in again] == ["one.py"]
+
+
+def test_relative_and_absolute_root_share_the_incremental_index(tmp_path, monkeypatch):
+    import core.index.query as query_module
+
+    config = {"index": {"db_path": str(tmp_path / "idx.sqlite3")}}
+    _write(tmp_path / "repo" / "m.py", "def thing():\n    pass\n")
+    query_code_index("thing", root=tmp_path / "repo", config=config)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(query_module, "parse_file", lambda path: pytest.fail(f"reparsed {path}"))
+    assert len(query_code_index("thing", root=Path("repo"), config=config)) == 1

@@ -113,3 +113,22 @@ def test_parse_file_extracts_javascript(tmp_path):
     assert by_symbol["foo"].kind == "function"
     assert by_symbol["Bar"].kind == "class"
     assert by_symbol["methodA"].kind == "method"
+
+
+def test_function_nested_inside_a_method_is_a_function_not_a_method(tmp_path):
+    source = (
+        "class Bar:\n"
+        "    def method_a(self):\n"
+        "        def helper():\n"
+        "            pass\n"
+        "        return helper\n"
+        "    class Inner:\n"
+        "        def inner_method(self):\n"
+        "            pass\n"
+    )
+    py_file = tmp_path / "nested.py"
+    py_file.write_text(source, encoding="utf-8")
+    by_symbol = {loc.symbol: loc for loc in parse_file(py_file)}
+    assert by_symbol["method_a"].kind == "method"
+    assert by_symbol["helper"].kind == "function"
+    assert by_symbol["inner_method"].kind == "method"

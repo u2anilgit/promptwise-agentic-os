@@ -34,7 +34,7 @@ Final whole-branch review found 0 blocker, 0 major, 3 minor — merged as-is per
 explicit recommendation. See `docs/superpowers/plans/2026-08-24-orchestrate-tasks.md` and
 `docs/superpowers/specs/2026-08-24-orchestrate-tasks-design.md`.
 
-- [ ] **Duplicate node ids report as "dag contains a cycle" rather than a distinct error** —
+- [x] **(FIXED 2026-10-20)** **Duplicate node ids report as "dag contains a cycle" rather than a distinct error** —
   `core/orchestrate/graph.py`'s `topological_order`: two `DagNode`s sharing an `id` aren't
   explicitly checked; Kahn's algorithm degrades to reporting them as if the DAG were cyclic
   (fails closed either way — no node runs — so this is a diagnostics-quality issue, not a
@@ -157,7 +157,7 @@ guard, non-directory `root`) were fixed before merge (`12d3288`); these are the 
 deferred (see `docs/superpowers/plans/2026-08-24-code-index.md` and
 `docs/superpowers/specs/2026-08-24-code-index-design.md`).
 
-- [ ] **`LIKE` pattern doesn't escape `_`/`%`** — `core/index/store.py`'s `query_symbol` builds
+- [x] **(FIXED 2026-10-20)** **`LIKE` pattern doesn't escape `_`/`%`** — `core/index/store.py`'s `query_symbol` builds
   `WHERE symbol LIKE '%{symbol}%'` without escaping; `_` (matches any one char) is common in
   Python symbol names, so e.g. `foo_bar` also matches `fooXbar`. Not a SQL-injection risk
   (parameters are bound), just an over-match. Fix: escape `\`, `%`, `_` in the pattern and add
@@ -165,17 +165,17 @@ deferred (see `docs/superpowers/plans/2026-08-24-code-index.md` and
 - [ ] **No concurrency/lifecycle test coverage** — the fix for "connection never closed" and
   "no WAL/timeout" (both from the per-task review) shipped without a regression test; both are
   one-line assertions if picked up.
-- [ ] **Nested local function inside a method misclassified `kind="method"`** — Python's
+- [x] **(FIXED 2026-10-20)** **Nested local function inside a method misclassified `kind="method"`** — Python's
   `_is_inside_class` walks all ancestors, so a plain function nested inside a method is labelled
   a method too. Low impact (file/line is still correct, only the `kind` filter is affected).
   Fix: stop the ancestor walk at the first enclosing `function_definition`.
-- [ ] **`index.db_path` not declared in `core/config/defaults.yaml`** — works via its hardcoded
+- [x] **(FIXED 2026-10-20)** **`index.db_path` not declared in `core/config/defaults.yaml`** — works via its hardcoded
   fallback, but is undiscoverable next to the rest of `core/`'s declared config keys.
-- [ ] **Code index DB (+ WAL/shm files) not gitignored** — `.promptwise/code_index.sqlite3*` will
+- [x] **(ALREADY COVERED: `.promptwise/*.sqlite3*` in `.gitignore`)** **Code index DB (+ WAL/shm files) not gitignored** — `.promptwise/code_index.sqlite3*` will
   dirty `git status` once this verb runs against this repo or is exposed over MCP. Same
   pre-existing gap as `.promptwise/audit.jsonl`, but this branch is the first to write a binary,
   always-regenerable artifact there.
-- [ ] **Stale-row sweep isn't scoped to `root`** — `query_code_index` never normalizes `root`
+- [x] **(FIXED 2026-10-20)** **Stale-row sweep isn't scoped to `root`** — `query_code_index` never normalizes `root`
   (no `.resolve()`), so a relative vs. absolute `root` for the same repo produces disjoint file
   keys and the incremental-reindex sweep silently degrades to a full reparse; a shared DB across
   two roots would delete each other's rows. Correctness holds (results always rebuild), only the
