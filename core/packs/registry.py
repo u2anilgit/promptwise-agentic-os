@@ -16,6 +16,7 @@ import yaml
 from core.config.resolve import resolve_config_auto, resolve_path
 from core.packs.loader import PackValidationError, load_pack_manifest
 from core.packs.models import PACK_NAME_RE, PackManifest
+from core.packs.semver import satisfies
 
 REGISTRY_DIRNAME = "registry"
 
@@ -84,15 +85,24 @@ def install_pack(name: str, config: dict | None = None, root: Path | None = None
         raise PackInstallError(
             f"pack.yaml name {manifest.name!r} does not match requested pack {name!r}"
         )
-    if manifest.name in manifest.dependencies:
+    if manifest.name in manifest.dependency_names():
         raise PackInstallError(f"{name} declares itself as a dependency")
 
     installed_dir = _installed_dir(config, resolved_root)
-    missing_deps = [dep for dep in manifest.dependencies if not (installed_dir / dep).exists()]
+    missing_deps = [dep for dep in manifest.dependency_names() if not (installed_dir / dep).exists()]
     if missing_deps:
         raise PackInstallError(
             f"{name} depends on {', '.join(missing_deps)}, which must be installed first"
         )
+    for dep, version_range in manifest.dependency_ranges():
+        if version_range is None:
+            continue
+        try:
+            installed = load_pack_manifest(installed_dir / dep)
+        except Exception as exc:  # noqa: BLE001 - an unreadable dependency cannot satisfy a range
+            raise PackInstallError(f"{name} depends on {dep}, whose installed manifest is invalid: {exc}") from exc
+        if not satisfies(installed.version, version_range):
+            raise PackInstallError(f"{name} needs {dep} {version_range}; installed {dep} {installed.version} does not satisfy {version_range}")
 
     dest_dir = installed_dir / name
     # Defense in depth beyond the slug regex: the resolved dest must stay
@@ -122,6 +132,9 @@ def install_pack(name: str, config: dict | None = None, root: Path | None = None
 def remove_pack(name: str, config: dict | None = None, root: Path | None = None) -> bool:
     _validate_name(name)
     dest_dir = _installed_dir(config, root) / name
+    dependents = [m.name for _, m, _ in list_installed_packs(config=config, root=root) if m is not None and m.name != name and name in m.dependency_names()]
+    if dependents:
+        raise PackInstallError(f"cannot remove {name}: {', '.join(sorted(dependents))} depends on it (remove those first)")
     if dest_dir.is_symlink():
         # shutil.rmtree refuses to operate on a symlink (raises OSError) —
         # and even if it didn't, recursing through it would delete

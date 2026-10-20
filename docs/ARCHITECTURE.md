@@ -70,7 +70,7 @@ capabilities:            # declared least-privilege — enforced by check_policy
   - shell:run:ruff
 permissions_rationale: >
   Needs shell access only to invoke pytest/ruff during verify_output; no fs:write, no network.
-dependencies: []          # other pack names this one requires
+dependencies: []          # other packs this one requires: "name" or "name >=1.0.0,<2.0.0"
 ```
 
 ### Pack families (from `research/aug2026-findings.md` Part 7)
@@ -88,7 +88,7 @@ dependencies: []          # other pack names this one requires
 ### Install/discovery mechanism
 
 1. `promptwise pack install <name>[@version]` copies (or symlinks in dev) `packs/registry/<name>/` into `packs/installed/<name>/`.
-2. Core's pack loader validates `pack.yaml` against the manifest schema, checks `requires_core` semver range, resolves `dependencies`, and registers the pack's capabilities with `check_policy` **before** any pack content is exposed to an agent. *(Status: schema/semver validation and dependency-presence checking — `install_pack` refuses to install a pack whose declared dependencies aren't already installed — shipped. Not yet built: no version-constrained dependency resolution or auto-install-in-order, and no automatic `check_policy` capability registration for an installed pack's declared `capabilities` — that needs an actor-scoped policy model check_policy doesn't have yet. See `docs/BACKLOG.md`.)*
+2. Core's pack loader validates `pack.yaml` against the manifest schema, checks `requires_core` semver range, resolves `dependencies`, and registers the pack's capabilities with `check_policy` **before** any pack content is exposed to an agent. *(Status: schema/semver validation and dependency-presence checking — `install_pack` refuses to install a pack whose declared dependencies aren't already installed — shipped. Version ranges on dependencies are checked against the installed pack, and a pack another installed pack depends on cannot be removed. Not yet built: auto-install-in-order, and no automatic `check_policy` capability registration for an installed pack's declared `capabilities` — that needs an actor-scoped policy model check_policy doesn't have yet. See `docs/BACKLOG.md`.)*
 3. Packs are hot-discoverable — the loader watches `packs/installed/` and re-registers on change; no core restart required for content-only packs (persona/verify-rule/DAG changes). Adding a new *capability* to an already-installed pack requires an explicit re-approval (policy re-grant), never silent escalation.
 4. `promptwise pack list / pack remove <name>` — removal deletes from `packs/installed/` and deregisters; core and other packs keep working.
 

@@ -249,3 +249,43 @@ def test_remove_unlinks_a_symlinked_install_without_deleting_the_target(tmp_path
     assert not link.exists()
     assert real_target.exists()  # the symlink target itself must survive
     assert (real_target / "keepme.txt").exists()
+
+
+def _install_required(tmp_path, version="1.0.0"):
+    yaml = VALID_YAML.replace("name: sample-pack", "name: required-pack").replace("version: 1.0.0", f"version: {version}")
+    _make_registry_pack(tmp_path, name="required-pack", contents=yaml)
+    install_pack("required-pack", config=_config(), root=tmp_path)
+
+
+def test_dependency_with_a_satisfied_version_range_installs(tmp_path):
+    _install_required(tmp_path, "1.2.0")
+    _make_registry_pack(tmp_path, contents=VALID_YAML.replace("dependencies: []", 'dependencies: ["required-pack >=1.0.0,<2.0.0"]'))
+    assert install_pack("sample-pack", config=_config(), root=tmp_path).name == "sample-pack"
+
+
+def test_dependency_with_an_unsatisfied_version_range_is_refused(tmp_path):
+    _install_required(tmp_path, "2.1.0")
+    _make_registry_pack(tmp_path, contents=VALID_YAML.replace("dependencies: []", 'dependencies: ["required-pack >=1.0.0,<2.0.0"]'))
+    with pytest.raises(PackInstallError, match="required-pack 2.1.0 does not satisfy >=1.0.0,<2.0.0"):
+        install_pack("sample-pack", config=_config(), root=tmp_path)
+    assert not (tmp_path / "packs" / "installed" / "sample-pack").exists()
+
+
+def test_malformed_dependency_entries_are_rejected_by_the_manifest(tmp_path):
+    from core.packs.models import PackManifest
+
+    base = dict(name="x-pack", version="1.0.0", kind="intelligence", summary="s", requires_core=">=0.1.0", permissions_rationale="r")
+    for bad in ["Bad_Name", "ok-pack >=1.0", "ok-pack ~1.0.0", "ok-pack >=1.0.0 extra"]:
+        with pytest.raises(ValueError):
+            PackManifest(**base, dependencies=[bad])
+    assert PackManifest(**base, dependencies=["ok-pack", "other-pack >=1.0.0,<2.0.0"]).dependency_names() == ["ok-pack", "other-pack"]
+
+
+def test_removing_a_pack_another_pack_depends_on_is_refused(tmp_path):
+    _install_required(tmp_path)
+    _make_registry_pack(tmp_path, contents=VALID_YAML.replace("dependencies: []", "dependencies: [required-pack]"))
+    install_pack("sample-pack", config=_config(), root=tmp_path)
+    with pytest.raises(PackInstallError, match="sample-pack depends on it"):
+        remove_pack("required-pack", config=_config(), root=tmp_path)
+    remove_pack("sample-pack", config=_config(), root=tmp_path)
+    remove_pack("required-pack", config=_config(), root=tmp_path)
